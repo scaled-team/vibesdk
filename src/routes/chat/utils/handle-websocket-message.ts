@@ -67,6 +67,7 @@ export interface HandleMessageDeps {
     setBehaviorType: React.Dispatch<React.SetStateAction<BehaviorType>>;
     setInternalProjectType: React.Dispatch<React.SetStateAction<ProjectType>>;
     setTemplateDetails: React.Dispatch<React.SetStateAction<TemplateDetails | null>>;
+    setQueuedRequests: React.Dispatch<React.SetStateAction<string[]>>;
     onPresentationFileEvent?: (event: { type: 'file_generating' | 'file_chunk' | 'file_generated'; path: string; chunk?: string; contents?: string }) => void;
     clearDeploymentTimeout?: () => void;
 
@@ -400,6 +401,11 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 }
 
                 logger.debug('✅ Agent state update processed');
+
+                // Surface pending user inputs to the UI for queue indicator
+                if (state.pendingUserInputs) {
+                    deps.setQueuedRequests(state.pendingUserInputs);
+                }
                 break;
             }
 

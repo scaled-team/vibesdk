@@ -150,6 +150,9 @@ export function useChat({
 	// Track whether we've completed initial state restoration to avoid disrupting active sessions
 	const [isInitialStateRestored, setIsInitialStateRestored] = useState(false);
 
+	// Queued user requests waiting to be implemented in next phases
+	const [queuedRequests, setQueuedRequests] = useState<string[]>([]);
+
 	const updateStage = useCallback(
 		(stageId: ProjectStage['id'], data: Partial<Omit<ProjectStage, 'id'>>) => {
 			logger.debug('updateStage', { stageId, ...data });
@@ -225,6 +228,7 @@ export function useChat({
 				setBehaviorType,
 				setInternalProjectType,
 				setTemplateDetails,
+				setQueuedRequests,
 				// Current state
 				isInitialStateRestored,
 				blueprint,
@@ -522,11 +526,11 @@ export function useChat({
 								updateStage('bootstrap', { status: 'completed' });
 								updateStage('blueprint', { status: 'active' });
 							}
-                                                        parser.feed(obj.chunk);
-                                                        const partial = parser.tryFinalize();
-                                                        if (partial) {
-                                                                setBlueprint(partial);
-                                                        }
+							parser.feed(obj.chunk);
+							const partial = parser.tryFinalize();
+							if (partial) {
+								setBlueprint(partial);
+							}
 						}
 						if (obj.agentId) {
 							result.agentId = obj.agentId;
@@ -790,5 +794,6 @@ export function useChat({
 		projectType: internalProjectType,
 		templateDetails,
 		allFiles,
+		queuedRequests,
 	};
 }

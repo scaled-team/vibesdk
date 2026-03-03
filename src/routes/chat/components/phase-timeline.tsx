@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { Loader, Check, AlertCircle, ChevronDown, ChevronRight, ArrowUp, Zap, XCircle } from 'lucide-react';
+import { Loader, Check, AlertCircle, ChevronDown, ChevronRight, ArrowUp, Zap, XCircle, ListTodo } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import type { RefObject } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -194,6 +194,8 @@ interface PhaseTimelineProps {
 	// Activity state
 	isGenerating?: boolean;
 	isThinking?: boolean;
+	// Queued user requests
+	queuedRequests?: string[];
 }
 
 // Helper function to truncate long file paths
@@ -281,7 +283,8 @@ export function PhaseTimeline({
 	staticIssueCount = 0,
 	isDebugging = false,
 	isGenerating = false,
-	isThinking = false
+	isThinking = false,
+	queuedRequests = []
 }: PhaseTimelineProps) {
 	const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
 	const [showCollapsedBar, setShowCollapsedBar] = useState(false);
@@ -371,7 +374,7 @@ export function PhaseTimeline({
 			const remaining = pendingMilestones.length;
 			return {
 				text: `Implementing: ${truncatePhaseName(generatingPhase.name)}`,
-				subtitle: remaining > 0 ? `${progress}/${total} phases · ${remaining} remaining` : `${progress}/${total} phases`,
+				subtitle: remaining > 0 ? `${progress}/${total} phases · ${remaining} remaining` : queuedRequests.length > 0 ? `${progress}/${total} phases · ${queuedRequests.length} queued` : `${progress}/${total} phases`,
 				icon: <StatusLoader color="accent" />,
 				badge: phaseBadge
 			};
@@ -412,7 +415,7 @@ export function PhaseTimeline({
 			icon: <div className="w-4 h-4 bg-gradient-to-br from-zinc-300/30 to-zinc-400/20 dark:from-zinc-600/30 dark:to-zinc-700/20 rounded-full" />,
 			badge: undefined
 		};
-	}, [phaseTimeline, isThinkingNext, isPreviewDeploying, progress, total, projectStages, pendingMilestones]);
+	}, [phaseTimeline, isThinkingNext, isPreviewDeploying, progress, total, projectStages, pendingMilestones, queuedRequests]);
 
 	const togglePhase = (phaseId: string) => {
 		setExpandedPhases(prev => {
@@ -519,53 +522,53 @@ export function PhaseTimeline({
 							whileTap={{ scale: 0.98 }}
 						>
 							{/* Collapsed Header */}
-                            <motion.div
-                                className="px-4 py-3 flex items-center gap-3"
-                                initial={{ opacity: 0.8 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0.8 }}
-                                transition={commonTransitions.fast}
-                            >
-                                <div className="flex-shrink-0">
-                                    {collapsedBarInfo.icon}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-medium text-text-primary truncate">
-                                        {collapsedBarInfo.text}
-                                    </div>
-                                    {collapsedBarInfo.subtitle && (
-                                        <div className="text-xs text-text-secondary truncate">
-                                            {collapsedBarInfo.subtitle}
-                                        </div>
-                                    )}
-                                </div>
-                                {collapsedBarInfo.badge && (
-                                    <div className="flex-shrink-0">
-                                        <span className="text-xs font-medium px-2 py-0.5 bg-accent/10 text-accent rounded-full">
-                                            {collapsedBarInfo.badge}
-                                        </span>
-                                    </div>
-                                )}
-                                {chatId && handleDeployToCloudflare && (
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDeployToCloudflare(chatId);
-                                        }}
-                                        disabled={!!isDeploying}
-                                        className="ml-2 flex items-center gap-1.5 px-2.5 py-1 bg-accent hover:bg-accent/90 disabled:bg-accent/50 text-white rounded-full text-xs font-medium transition-colors disabled:cursor-not-allowed"
-                                        title={isDeploying ? 'Deploying...' : 'Deploy'}
-                                        aria-label={isDeploying ? 'Deploying' : 'Deploy'}
-                                    >
-                                        {isDeploying ? (
-                                            <StatusLoader size="sm" color="accent" />
-                                        ) : (
-                                            <Zap className="w-3 h-3" />
-                                        )}
-                                        <span className="hidden sm:inline">{isDeploying ? 'Deploying...' : 'Deploy'}</span>
-                                    </button>
-                                )}
-                            </motion.div>
+							<motion.div
+								className="px-4 py-3 flex items-center gap-3"
+								initial={{ opacity: 0.8 }}
+								animate={{ opacity: 1 }}
+								exit={{ opacity: 0.8 }}
+								transition={commonTransitions.fast}
+							>
+								<div className="flex-shrink-0">
+									{collapsedBarInfo.icon}
+								</div>
+								<div className="flex-1 min-w-0">
+									<div className="text-sm font-medium text-text-primary truncate">
+										{collapsedBarInfo.text}
+									</div>
+									{collapsedBarInfo.subtitle && (
+										<div className="text-xs text-text-secondary truncate">
+											{collapsedBarInfo.subtitle}
+										</div>
+									)}
+								</div>
+								{collapsedBarInfo.badge && (
+									<div className="flex-shrink-0">
+										<span className="text-xs font-medium px-2 py-0.5 bg-accent/10 text-accent rounded-full">
+											{collapsedBarInfo.badge}
+										</span>
+									</div>
+								)}
+								{chatId && handleDeployToCloudflare && (
+									<button
+										onClick={(e) => {
+											e.stopPropagation();
+											handleDeployToCloudflare(chatId);
+										}}
+										disabled={!!isDeploying}
+										className="ml-2 flex items-center gap-1.5 px-2.5 py-1 bg-accent hover:bg-accent/90 disabled:bg-accent/50 text-white rounded-full text-xs font-medium transition-colors disabled:cursor-not-allowed"
+										title={isDeploying ? 'Deploying...' : 'Deploy'}
+										aria-label={isDeploying ? 'Deploying' : 'Deploy'}
+									>
+										{isDeploying ? (
+											<StatusLoader size="sm" color="accent" />
+										) : (
+											<Zap className="w-3 h-3" />
+										)}
+										<span className="hidden sm:inline">{isDeploying ? 'Deploying...' : 'Deploy'}</span>
+									</button>
+								)}
+							</motion.div>
 
 							{/* Expanded Content */}
 							<AnimatePresence>
@@ -681,360 +684,408 @@ export function PhaseTimeline({
 			>
 				{/* Main Timeline Card */}
 				<div ref={timelineCardRef} className="px-2 pr-3.5 py-3 flex-1 rounded-xl border border-black/12 bg-bg-4 dark:bg-bg-2">
-				{/* Calculate if Done/Debugging will show for line extension */}
-				{(() => {
-					const allStagesCompleted = projectStages.every(stage => stage.status === 'completed');
-					const isAnythingHappening = isDebugging || isGenerating || isThinking || isPreviewDeploying;
-					const willShowStatusStage = (allStagesCompleted && !isAnythingHappening) || isDebugging;
-					
-					return (
-						<>
-				{/* Project Stages */}
-				{projectStages.map((stage, index) => (
-					<div key={stage.id} className="flex relative w-full gap-2 pb-2.5">
-						<AnimatedStatusIndicator status={stage.status} />
+					{/* Calculate if Done/Debugging will show for line extension */}
+					{(() => {
+						const allStagesCompleted = projectStages.every(stage => stage.status === 'completed');
+						const isAnythingHappening = isDebugging || isGenerating || isThinking || isPreviewDeploying;
+						const willShowStatusStage = (allStagesCompleted && !isAnythingHappening) || isDebugging;
 
-						<div className="flex flex-col gap-2 flex-1">
-							<div className="flex">
-								<span className={clsx(
-									'font-medium',
-									stage.status === 'pending'
-										? 'text-text-tertiary'
-										: 'text-text-secondary'
-								)}>
-									{stage.title}
-								</span>
+						return (
+							<>
+								{/* Project Stages */}
+								{projectStages.map((stage, index) => (
+									<div key={stage.id} className="flex relative w-full gap-2 pb-2.5">
+										<AnimatedStatusIndicator status={stage.status} />
 
-								{/* Progress for code stage */}
-								{stage.id === 'code' && stage.status !== 'pending' && (
-									<motion.div
-										initial={{ x: -120 }}
-										animate={{ x: 0 }}
-									>
-										<span className="text-zinc-300 mx-1">&bull;</span>
-										<span className="text-text-tertiary">
-											{progress}/{total} phases
-										</span>
-									</motion.div>
-								)}
-
-								{/* Subtle inline issue indicator for completed code stage */}
-								{stage.id === 'code' && stage.status === 'completed' && (runtimeErrorCount > 0 || staticIssueCount > 0) && (
-									<motion.span
-										initial={{ opacity: 0, scale: 0.9 }}
-										animate={{ opacity: 1, scale: 1 }}
-										transition={commonTransitions.premiumShort}
-										className="inline-flex items-center gap-1.5 ml-1.5 text-xs"
-									>
-										<span className="text-zinc-300">&bull;</span>
-										{runtimeErrorCount > 0 && (
-											<span className="inline-flex items-center gap-1">
-												<div className="w-1.5 h-1.5 rounded-full bg-red-400" />
-												<span className="text-red-400/80">{runtimeErrorCount} error{runtimeErrorCount > 1 ? 's' : ''}</span>
-											</span>
-										)}
-										{runtimeErrorCount > 0 && staticIssueCount > 0 && (
-											<span className="text-text-tertiary/50">,</span>
-										)}
-										{staticIssueCount > 0 && (
-											<span className="inline-flex items-center gap-1">
-												<div className="w-1.5 h-1.5 rounded-full bg-orange-400" />
-												<span className="text-orange-400/80">{staticIssueCount} warning{staticIssueCount > 1 ? 's' : ''}</span>
-											</span>
-										)}
-									</motion.span>
-								)}
-							</div>
-
-							{/* Blueprint button */}
-							{stage.id === 'blueprint' && stage.status !== 'pending' && (
-								<button
-									onClick={() => onViewChange?.('blueprint')}
-									className={clsx(
-										'flex items-start ml-0.5 transition-colors font-mono',
-										view === 'blueprint'
-											? 'text-brand underline decoration-dotted'
-											: 'text-text-secondary/80 hover:bg-bg-2/50 hover:text-text-secondary'
-									)}
-								>
-									<span className="text-xs text-left truncate">
-										Blueprint.md
-									</span>
-								</button>
-							)}
-
-							{/* Detailed Phase Timeline for code stage */}
-							{stage.id === 'code' && (
-								<div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 phase-timeline-scroll relative">
-									{phaseTimeline.map((phase, phaseIndex) => (
-										<div
-											key={phase.id}
-											className="space-y-1 relative"
-											ref={phaseIndex === phaseTimeline.length - 1 ? lastPhaseRef : undefined}
-										>
-											{/* Subtle vertical line connecting phases */}
-											{phaseIndex < phaseTimeline.length - 1 && (
-												<div className="absolute left-[5px] w-[0.5px] h-full top-3 bg-border-primary/40" />
-											)}
-											{/* Phase Implementation Header */}
-											<button
-												onClick={() => (phase.status === 'completed' || phase.status === 'cancelled') && togglePhase(phase.id)}
-												className="flex items-start gap-2 relative z-0 w-full text-left hover:bg-zinc-50/5 rounded px-1 py-1 transition-colors group"
-												disabled={phase.status !== 'completed' && phase.status !== 'cancelled'}
-											>
-												{/* Expand/Collapse chevron for completed/cancelled phases */}
-												{(phase.status === 'completed' || phase.status === 'cancelled') && (
-													<div className="flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity mt-0.5">
-														{expandedPhases.has(phase.id) ? (
-															<ChevronDown className="size-3" />
-														) : (
-															<ChevronRight className="size-3" />
-														)}
-													</div>
-												)}
-
-												<div className="flex-shrink-0 mt-0.5">
-													<StatusIcon status={phase.status} size="sm" />
-												</div>
-												<span className="text-sm font-medium text-text-50 flex-1 break-words">
-													{phase.status === 'completed' ? `Implemented ${phase.name}` :
-													 phase.status === 'cancelled' ? `Cancelled ${phase.name}` :
-													 phase.status === 'validating' ? `Reviewing ${phase.name}` :
-													 `Implementing ${phase.name}`}
+										<div className="flex flex-col gap-2 flex-1">
+											<div className="flex">
+												<span className={clsx(
+													'font-medium',
+													stage.status === 'pending'
+														? 'text-text-tertiary'
+														: 'text-text-secondary'
+												)}>
+													{stage.title}
 												</span>
 
-												{/* File count badge for collapsed completed/cancelled phases */}
-												{(phase.status === 'completed' || phase.status === 'cancelled') && !expandedPhases.has(phase.id) && (
-													<span className="text-xs text-text-primary/50 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded flex-shrink-0">
-														{phase.files.length} files
-													</span>
+												{/* Progress for code stage */}
+												{stage.id === 'code' && stage.status !== 'pending' && (
+													<motion.div
+														initial={{ x: -120 }}
+														animate={{ x: 0 }}
+													>
+														<span className="text-zinc-300 mx-1">&bull;</span>
+														<span className="text-text-tertiary">
+															{progress}/{total} phases
+														</span>
+													</motion.div>
 												)}
-											</button>
 
-											{/* Phase Files - Show when implementing, validating, or expanded */}
-											{(phase.status === 'generating' || phase.status === 'validating' || ((phase.status === 'completed' || phase.status === 'cancelled') && expandedPhases.has(phase.id))) && (
-												<div className="ml-6 space-y-0.5">
-													{phase.files.map((phaseFile) => {
-														// Check if this file exists in the global files array for click handling
-														const globalFile = files.find(f => f.filePath === phaseFile.path);
-														const isFileActive = view === 'editor' && activeFile?.filePath === phaseFile.path;
+												{/* Subtle inline issue indicator for completed code stage */}
+												{stage.id === 'code' && stage.status === 'completed' && (runtimeErrorCount > 0 || staticIssueCount > 0) && (
+													<motion.span
+														initial={{ opacity: 0, scale: 0.9 }}
+														animate={{ opacity: 1, scale: 1 }}
+														transition={commonTransitions.premiumShort}
+														className="inline-flex items-center gap-1.5 ml-1.5 text-xs"
+													>
+														<span className="text-zinc-300">&bull;</span>
+														{runtimeErrorCount > 0 && (
+															<span className="inline-flex items-center gap-1">
+																<div className="w-1.5 h-1.5 rounded-full bg-red-400" />
+																<span className="text-red-400/80">{runtimeErrorCount} error{runtimeErrorCount > 1 ? 's' : ''}</span>
+															</span>
+														)}
+														{runtimeErrorCount > 0 && staticIssueCount > 0 && (
+															<span className="text-text-tertiary/50">,</span>
+														)}
+														{staticIssueCount > 0 && (
+															<span className="inline-flex items-center gap-1">
+																<div className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+																<span className="text-orange-400/80">{staticIssueCount} warning{staticIssueCount > 1 ? 's' : ''}</span>
+															</span>
+														)}
+													</motion.span>
+												)}
+											</div>
 
-														return (
+											{/* Blueprint button */}
+											{stage.id === 'blueprint' && stage.status !== 'pending' && (
+												<button
+													onClick={() => onViewChange?.('blueprint')}
+													className={clsx(
+														'flex items-start ml-0.5 transition-colors font-mono',
+														view === 'blueprint'
+															? 'text-brand underline decoration-dotted'
+															: 'text-text-secondary/80 hover:bg-bg-2/50 hover:text-text-secondary'
+													)}
+												>
+													<span className="text-xs text-left truncate">
+														Blueprint.md
+													</span>
+												</button>
+											)}
+
+											{/* Detailed Phase Timeline for code stage */}
+											{stage.id === 'code' && (
+												<div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 phase-timeline-scroll relative">
+													{phaseTimeline.map((phase, phaseIndex) => (
+														<div
+															key={phase.id}
+															className="space-y-1 relative"
+															ref={phaseIndex === phaseTimeline.length - 1 ? lastPhaseRef : undefined}
+														>
+															{/* Subtle vertical line connecting phases */}
+															{phaseIndex < phaseTimeline.length - 1 && (
+																<div className="absolute left-[5px] w-[0.5px] h-full top-3 bg-border-primary/40" />
+															)}
+															{/* Phase Implementation Header */}
 															<button
-																key={phaseFile.path}
-																onClick={() => globalFile && onFileClick(globalFile)}
-																className="flex items-start gap-2 py-1 transition-colors font-mono w-full text-left group hover:bg-zinc-50/5 rounded px-2 min-h-0"
-																aria-selected={isFileActive}
-																disabled={!globalFile}
+																onClick={() => (phase.status === 'completed' || phase.status === 'cancelled') && togglePhase(phase.id)}
+																className="flex items-start gap-2 relative z-0 w-full text-left hover:bg-zinc-50/5 rounded px-1 py-1 transition-colors group"
+																disabled={phase.status !== 'completed' && phase.status !== 'cancelled'}
 															>
-																{/* Status Icon BEFORE filename */}
-																<span className="flex-shrink-0">
-																	<StatusIcon status={phaseFile.status} size="sm" />
+																{/* Expand/Collapse chevron for completed/cancelled phases */}
+																{(phase.status === 'completed' || phase.status === 'cancelled') && (
+																	<div className="flex-shrink-0 opacity-60 group-hover:opacity-100 transition-opacity mt-0.5">
+																		{expandedPhases.has(phase.id) ? (
+																			<ChevronDown className="size-3" />
+																		) : (
+																			<ChevronRight className="size-3" />
+																		)}
+																	</div>
+																)}
+
+																<div className="flex-shrink-0 mt-0.5">
+																	<StatusIcon status={phase.status} size="sm" />
+																</div>
+																<span className="text-sm font-medium text-text-50 flex-1 break-words">
+																	{phase.status === 'completed' ? `Implemented ${phase.name}` :
+																		phase.status === 'cancelled' ? `Cancelled ${phase.name}` :
+																			phase.status === 'validating' ? `Reviewing ${phase.name}` :
+																				`Implementing ${phase.name}`}
 																</span>
 
-																{/* File Path with proper truncation and wrapping */}
-																<div className="flex-1 min-w-0">
-																	<span
-																		className={clsx(
-																			'text-xs text-left block transition-colors break-all leading-tight',
-																			isFileActive
-																				? 'text-brand font-medium'
-																				: globalFile ? 'text-text-primary/80 group-hover:text-text-primary' : 'text-text-primary/50',
-																		)}
-																		title={phaseFile.path}
-																	>
-																		{truncateFilePath(phaseFile.path)}
+																{/* File count badge for collapsed completed/cancelled phases */}
+																{(phase.status === 'completed' || phase.status === 'cancelled') && !expandedPhases.has(phase.id) && (
+																	<span className="text-xs text-text-primary/50 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded flex-shrink-0">
+																		{phase.files.length} files
+																	</span>
+																)}
+															</button>
+
+															{/* Phase Files - Show when implementing, validating, or expanded */}
+															{(phase.status === 'generating' || phase.status === 'validating' || ((phase.status === 'completed' || phase.status === 'cancelled') && expandedPhases.has(phase.id))) && (
+																<div className="ml-6 space-y-0.5">
+																	{phase.files.map((phaseFile) => {
+																		// Check if this file exists in the global files array for click handling
+																		const globalFile = files.find(f => f.filePath === phaseFile.path);
+																		const isFileActive = view === 'editor' && activeFile?.filePath === phaseFile.path;
+
+																		return (
+																			<button
+																				key={phaseFile.path}
+																				onClick={() => globalFile && onFileClick(globalFile)}
+																				className="flex items-start gap-2 py-1 transition-colors font-mono w-full text-left group hover:bg-zinc-50/5 rounded px-2 min-h-0"
+																				aria-selected={isFileActive}
+																				disabled={!globalFile}
+																			>
+																				{/* Status Icon BEFORE filename */}
+																				<span className="flex-shrink-0">
+																					<StatusIcon status={phaseFile.status} size="sm" />
+																				</span>
+
+																				{/* File Path with proper truncation and wrapping */}
+																				<div className="flex-1 min-w-0">
+																					<span
+																						className={clsx(
+																							'text-xs text-left block transition-colors break-all leading-tight',
+																							isFileActive
+																								? 'text-brand font-medium'
+																								: globalFile ? 'text-text-primary/80 group-hover:text-text-primary' : 'text-text-primary/50',
+																						)}
+																						title={phaseFile.path}
+																					>
+																						{truncateFilePath(phaseFile.path)}
+																					</span>
+																				</div>
+
+																				{/* Incremental line count with responsive width and truncation */}
+																				{globalFile && (() => {
+																					const incrementalLines = calculateIncrementalLineCount(
+																						phaseFile.path,
+																						phaseIndex,
+																						phaseTimeline,
+																						files
+																					);
+																					const displayCount = incrementalLines > 999 ? `${Math.floor(incrementalLines / 1000)}k` : incrementalLines.toString();
+
+																					return (
+																						<span
+																							className="flex-shrink-0 text-text-tertiary text-xs font-mono text-right w-12 ml-2"
+																							title={`${incrementalLines} lines added in this phase`}
+																						>
+																							+{displayCount}
+																						</span>
+																					);
+																				})()}
+																			</button>
+																		);
+																	})}
+																</div>
+															)}
+														</div>
+													))}
+
+													{/* Pending milestones queue from blueprint plan */}
+													{pendingMilestones.length > 0 && (
+														<div className="space-y-0.5 relative mt-1">
+															{phaseTimeline.length > 0 && (
+																<div className="absolute left-[5px] w-[0.5px] h-full top-0 bg-border-primary/20" />
+															)}
+															{pendingMilestones.map((milestone, index) => (
+																<div
+																	key={`pending-${index}`}
+																	className="flex items-start gap-2 relative z-0 w-full text-left px-1 py-0.5"
+																>
+																	<div className="flex-shrink-0 mt-0.5">
+																		<StatusIcon status="pending" size="sm" />
+																	</div>
+																	<span className="text-xs text-text-tertiary/50">
+																		{truncatePhaseName(milestone)}
 																	</span>
 																</div>
+															))}
+														</div>
+													)}
 
-																{/* Incremental line count with responsive width and truncation */}
-																{globalFile && (() => {
-																	const incrementalLines = calculateIncrementalLineCount(
-																		phaseFile.path,
-																		phaseIndex,
-																		phaseTimeline,
-																		files
-																	);
-																	const displayCount = incrementalLines > 999 ? `${Math.floor(incrementalLines / 1000)}k` : incrementalLines.toString();
+													{/* Validation/Preview deployment indicator */}
+													{(() => {
+														const validatingPhase = getPhaseByStatus(phaseTimeline, 'validating');
+														if (validatingPhase) {
+															return (
+																<div className="space-y-1 relative bg-blue-50/5 border border-blue-200/20 rounded-lg p-3">
+																	<div className="flex items-center gap-2">
+																		<StatusLoader size="sm" color="blue" />
+																		<span className="text-sm font-medium text-blue-400">Reviewing phase...</span>
+																	</div>
+																	<span className="text-xs text-blue-300/80 ml-5">Identifying issues...</span>
+																</div>
+															);
+														} else if (isPreviewDeploying) {
+															return (
+																<div className="space-y-1 relative bg-orange-50/5 border border-orange-200/20 rounded-lg p-3">
+																	<div className="flex items-center gap-2">
+																		<StatusLoader size="sm" color="orange" />
+																		<span className="text-sm font-medium text-orange-400">Deploying preview...</span>
+																	</div>
+																	<span className="text-xs text-orange-300/80 ml-5">Updating your preview environment</span>
+																</div>
+															);
+														}
+														return null;
+													})()}
 
-																	return (
-																		<span
-																			className="flex-shrink-0 text-text-tertiary text-xs font-mono text-right w-12 ml-2"
-																			title={`${incrementalLines} lines added in this phase`}
-																		>
-																			+{displayCount}
+													{/* Thinking indicator for next phase */}
+													{isThinkingNext && (
+														<div className="relative z-10" ref={lastPhaseRef}>
+															<ThinkingIndicator visible={isThinkingNext} />
+														</div>
+													)}
+
+													{/* Queued Requests Indicator */}
+													<AnimatePresence>
+														{queuedRequests.length > 0 && (
+															<motion.div
+																initial={{ opacity: 0, height: 0 }}
+																animate={{ opacity: 1, height: 'auto' }}
+																exit={{ opacity: 0, height: 0 }}
+																transition={commonTransitions.premiumShort}
+																className="relative z-10"
+															>
+																<div className="bg-purple-50/5 border border-purple-300/15 rounded-lg p-3 space-y-2">
+																	<div className="flex items-center gap-2">
+																		<div className="relative">
+																			<ListTodo className="size-3.5 text-purple-400" />
+																			<motion.div
+																				className="absolute -top-0.5 -right-0.5 size-1.5 bg-purple-400 rounded-full"
+																				animate={{ scale: [1, 1.4, 1], opacity: [1, 0.7, 1] }}
+																				transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+																			/>
+																		</div>
+																		<span className="text-xs font-medium text-purple-300">
+																			{queuedRequests.length} request{queuedRequests.length > 1 ? 's' : ''} queued
 																		</span>
-																	);
-																})()}
+																	</div>
+																	<div className="space-y-1 ml-5">
+																		{queuedRequests.slice(0, 3).map((request, idx) => (
+																			<motion.div
+																				key={idx}
+																				initial={{ opacity: 0, x: -8 }}
+																				animate={{ opacity: 1, x: 0 }}
+																				transition={{ delay: idx * 0.1, ...commonTransitions.fast }}
+																				className="text-xs text-text-tertiary truncate"
+																			>
+																				<span className="text-purple-400/60 mr-1.5">→</span>
+																				{request.length > 60 ? `${request.substring(0, 60)}...` : request}
+																			</motion.div>
+																		))}
+																		{queuedRequests.length > 3 && (
+																			<span className="text-xs text-purple-400/50">
+																				+{queuedRequests.length - 3} more
+																			</span>
+																		)}
+																	</div>
+																</div>
+															</motion.div>
+														)}
+													</AnimatePresence>
+
+													{/* Fallback for existing files when no phase timeline */}
+													{phaseTimeline.length === 0 && files.map((file) => {
+														const isFileActive = view === 'editor' && activeFile?.filePath === file.filePath;
+														return (
+															<button
+																key={file.filePath}
+																onClick={() => onFileClick(file)}
+																className="flex items-start gap-2 py-1 font-mono w-full text-left group hover:bg-zinc-50/5 rounded px-2 min-h-0"
+															>
+																<span className="flex-shrink-0">
+																	{file.isGenerating ? <StatusLoader size="sm" color="accent" /> : <StatusCheck size="sm" color="green" />}
+																</span>
+																<div className="flex-1 min-w-0">
+																	<span className={clsx('text-xs block break-all leading-tight', isFileActive ? 'text-brand font-medium' : 'text-text-primary/80')}>
+																		{truncateFilePath(file.filePath)}
+																	</span>
+																</div>
+																<span className="flex-shrink-0 text-text-tertiary text-xs font-mono text-right w-12 ml-2">
+																	+{file.fileContents.split('\n').length}
+																</span>
 															</button>
 														);
 													})}
 												</div>
 											)}
-										</div>
-									))}
 
-									{/* Pending milestones queue from blueprint plan */}
-								{pendingMilestones.length > 0 && (
-									<div className="space-y-0.5 relative mt-1">
-										{phaseTimeline.length > 0 && (
-											<div className="absolute left-[5px] w-[0.5px] h-full top-0 bg-border-primary/20" />
-										)}
-										{pendingMilestones.map((milestone, index) => (
-											<div
-												key={`pending-${index}`}
-												className="flex items-start gap-2 relative z-0 w-full text-left px-1 py-0.5"
-											>
-												<div className="flex-shrink-0 mt-0.5">
-													<StatusIcon status="pending" size="sm" />
-												</div>
-												<span className="text-xs text-text-tertiary/50">
-													{truncatePhaseName(milestone)}
+											{stage.metadata && (
+												<span className="font-mono text-xs text-zinc-500 tracking-tighter">
+													{stage.metadata}
 												</span>
-											</div>
-										))}
-									</div>
-								)}
+											)}
+										</div>
 
-								{/* Validation/Preview deployment indicator */}
+										{/* Vertical connecting line */}
+										{(index !== projectStages.length - 1 || (index === projectStages.length - 1 && willShowStatusStage)) && (
+											<div className={clsx(
+												'absolute left-[9.25px] w-px h-full top-2.5 z-10',
+												stage.status === 'completed'
+													? 'bg-accent'
+													: 'bg-text/5'
+											)} />
+										)}
+									</div>
+								))}
+
+								<AnimatePresence mode="wait">
+									{/* Done stage - shows when everything is complete and nothing is happening */}
 									{(() => {
-										const validatingPhase = getPhaseByStatus(phaseTimeline, 'validating');
-										if (validatingPhase) {
+										const allStagesCompleted = projectStages.every(stage => stage.status === 'completed');
+										const isAnythingHappening = isDebugging || isGenerating || isThinking || isPreviewDeploying;
+										const showDone = allStagesCompleted && !isAnythingHappening;
+
+										if (showDone) {
 											return (
-												<div className="space-y-1 relative bg-blue-50/5 border border-blue-200/20 rounded-lg p-3">
-													<div className="flex items-center gap-2">
-														<StatusLoader size="sm" color="blue" />
-														<span className="text-sm font-medium text-blue-400">Reviewing phase...</span>
+												<motion.div
+													key="done"
+													initial={{ opacity: 0 }}
+													animate={{ opacity: 1 }}
+													exit={{ opacity: 0 }}
+													transition={commonTransitions.premiumShort}
+													className="flex relative w-full gap-2 pb-2.5"
+												>
+													{/* Connecting line from previous stage */}
+													<div className="absolute left-[9.25px] w-px h-[0.875rem] -top-[0.875rem] bg-accent" />
+
+													<AnimatedStatusIndicator status="completed" />
+
+													<div className="flex flex-col gap-2 flex-1">
+														<span className="font-medium text-text-secondary">Done</span>
 													</div>
-													<span className="text-xs text-blue-300/80 ml-5">Identifying issues...</span>
-												</div>
-											);
-										} else if (isPreviewDeploying) {
-											return (
-												<div className="space-y-1 relative bg-orange-50/5 border border-orange-200/20 rounded-lg p-3">
-													<div className="flex items-center gap-2">
-														<StatusLoader size="sm" color="orange" />
-														<span className="text-sm font-medium text-orange-400">Deploying preview...</span>
-													</div>
-													<span className="text-xs text-orange-300/80 ml-5">Updating your preview environment</span>
-												</div>
+												</motion.div>
 											);
 										}
+
+										// Show debugging status when debugging
+										if (isDebugging) {
+											return (
+												<motion.div
+													key="debugging"
+													initial={{ opacity: 0 }}
+													animate={{ opacity: 1 }}
+													exit={{ opacity: 0 }}
+													transition={commonTransitions.premiumShort}
+													className="flex relative w-full gap-2 pb-2.5"
+												>
+													{/* Connecting line from previous stage */}
+													<div className="absolute left-[9.25px] w-px h-[0.875rem] -top-[0.875rem] bg-accent" />
+
+													<AnimatedStatusIndicator status="active" />
+
+													<div className="flex flex-col gap-2 flex-1">
+														<span className="font-medium text-text-secondary">Debugging in progress...</span>
+													</div>
+												</motion.div>
+											);
+										}
+
 										return null;
 									})()}
-
-									{/* Thinking indicator for next phase */}
-									{isThinkingNext && (
-										<div className="relative z-10" ref={lastPhaseRef}>
-											<ThinkingIndicator visible={isThinkingNext} />
-										</div>
-									)}
-
-									{/* Fallback for existing files when no phase timeline */}
-									{phaseTimeline.length === 0 && files.map((file) => {
-										const isFileActive = view === 'editor' && activeFile?.filePath === file.filePath;
-										return (
-											<button
-												key={file.filePath}
-												onClick={() => onFileClick(file)}
-												className="flex items-start gap-2 py-1 font-mono w-full text-left group hover:bg-zinc-50/5 rounded px-2 min-h-0"
-											>
-												<span className="flex-shrink-0">
-													{file.isGenerating ? <StatusLoader size="sm" color="accent" /> : <StatusCheck size="sm" color="green" />}
-												</span>
-												<div className="flex-1 min-w-0">
-													<span className={clsx('text-xs block break-all leading-tight', isFileActive ? 'text-brand font-medium' : 'text-text-primary/80')}>
-														{truncateFilePath(file.filePath)}
-													</span>
-												</div>
-												<span className="flex-shrink-0 text-text-tertiary text-xs font-mono text-right w-12 ml-2">
-													+{file.fileContents.split('\n').length}
-												</span>
-											</button>
-										);
-									})}
-								</div>
-							)}
-
-							{stage.metadata && (
-								<span className="font-mono text-xs text-zinc-500 tracking-tighter">
-									{stage.metadata}
-								</span>
-							)}
-						</div>
-
-						{/* Vertical connecting line */}
-						{(index !== projectStages.length - 1 || (index === projectStages.length - 1 && willShowStatusStage)) && (
-							<div className={clsx(
-								'absolute left-[9.25px] w-px h-full top-2.5 z-10',
-								stage.status === 'completed'
-									? 'bg-accent'
-									: 'bg-text/5'
-							)} />
-						)}
-					</div>
-				))}
-				
-				<AnimatePresence mode="wait">
-					{/* Done stage - shows when everything is complete and nothing is happening */}
-					{(() => {
-						const allStagesCompleted = projectStages.every(stage => stage.status === 'completed');
-						const isAnythingHappening = isDebugging || isGenerating || isThinking || isPreviewDeploying;
-						const showDone = allStagesCompleted && !isAnythingHappening;
-						
-						if (showDone) {
-							return (
-								<motion.div
-									key="done"
-									initial={{ opacity: 0 }}
-									animate={{ opacity: 1 }}
-									exit={{ opacity: 0 }}
-									transition={commonTransitions.premiumShort}
-									className="flex relative w-full gap-2 pb-2.5"
-								>
-									{/* Connecting line from previous stage */}
-									<div className="absolute left-[9.25px] w-px h-[0.875rem] -top-[0.875rem] bg-accent" />
-									
-									<AnimatedStatusIndicator status="completed" />
-									
-									<div className="flex flex-col gap-2 flex-1">
-										<span className="font-medium text-text-secondary">Done</span>
-									</div>
-								</motion.div>
-							);
-						}
-						
-						// Show debugging status when debugging
-						if (isDebugging) {
-							return (
-								<motion.div
-									key="debugging"
-									initial={{ opacity: 0 }}
-									animate={{ opacity: 1 }}
-									exit={{ opacity: 0 }}
-									transition={commonTransitions.premiumShort}
-									className="flex relative w-full gap-2 pb-2.5"
-								>
-									{/* Connecting line from previous stage */}
-									<div className="absolute left-[9.25px] w-px h-[0.875rem] -top-[0.875rem] bg-accent" />
-									
-									<AnimatedStatusIndicator status="active" />
-									
-									<div className="flex flex-col gap-2 flex-1">
-										<span className="font-medium text-text-secondary">Debugging in progress...</span>
-									</div>
-								</motion.div>
-							);
-						}
-						
-						return null;
+								</AnimatePresence>
+							</>
+						);
 					})()}
-			</AnimatePresence>
-			</>
-			);
-		})()}
-		</div>
-		</motion.div>
+				</div>
+			</motion.div>
 		</>
 	);
 }

@@ -158,6 +158,7 @@ export default function Chat() {
 		projectType,
 		// Template metadata
 		templateDetails,
+		queuedRequests,
 	} = useChat({
 		chatId: urlChatId,
 		query: userQuery,
@@ -788,6 +789,7 @@ export default function Chat() {
 									isDebugging={isDebugging}
 									isGenerating={isGenerating}
 									isThinking={isThinking}
+									queuedRequests={queuedRequests}
 								/>
 							)}
 
