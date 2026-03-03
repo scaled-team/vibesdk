@@ -1080,6 +1080,43 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 break;
             }
 
+            // Screenshot capture messages — logged to debug panel only (non-critical background operation)
+            case 'screenshot_capture_started': {
+                logger.debug('Screenshot capture started', message);
+                break;
+            }
+
+            case 'screenshot_capture_success': {
+                logger.info('Screenshot captured successfully', message);
+                onDebugMessage?.('info',
+                    'Screenshot Captured',
+                    `URL: ${(message as any).url}\nSize: ${(message as any).screenshotSize} bytes`,
+                    'Screenshot Capture'
+                );
+                break;
+            }
+
+            case 'screenshot_capture_error': {
+                logger.warn('Screenshot capture failed (non-critical)', message);
+                onDebugMessage?.('warning',
+                    'Screenshot Capture Failed',
+                    `Error: ${(message as any).error}\nURL: ${(message as any).url}${(message as any).configurationError ? '\nNote: Configuration error — check CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN' : ''}`,
+                    'Screenshot Capture'
+                );
+                break;
+            }
+
+            case 'screenshot_analysis_result': {
+                logger.debug('Screenshot analysis result', message);
+                break;
+            }
+
+            // MCP servers info — silent
+            case 'cf_agent_mcp_servers' as any: {
+                logger.debug('MCP servers info received');
+                break;
+            }
+
             default:
                 logger.warn('Unhandled message:', message);
         }

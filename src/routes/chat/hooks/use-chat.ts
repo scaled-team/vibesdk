@@ -82,6 +82,8 @@ export function useChat({
 	const deploymentTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 	// Track the latest connection attempt to avoid handling stale socket events
 	const connectAttemptIdRef = useRef(0);
+	// Track previous urlChatId to detect project switches
+	const prevUrlChatIdRef = useRef(urlChatId);
 	const connectWithRetryRef = useRef<
 		((
 			wsUrl: string,
@@ -633,6 +635,67 @@ export function useChat({
 		userImages,
 		userQuery,
 	]);
+
+	// Reset all state when switching between projects (urlChatId changes)
+	useEffect(() => {
+		if (prevUrlChatIdRef.current === urlChatId) return;
+		prevUrlChatIdRef.current = urlChatId;
+
+		logger.debug('🔄 Project switch detected, resetting chat state for:', urlChatId);
+
+		// Close existing websocket
+		websocket?.close();
+
+		// Reset connection status so init() can re-run
+		connectionStatus.current = 'idle';
+		retryCount.current = 0;
+		connectAttemptIdRef.current++;
+
+		// Clear pending retry timeouts
+		retryTimeouts.current.forEach(clearTimeout);
+		retryTimeouts.current = [];
+
+		// Clear deployment timeout
+		if (deploymentTimeoutRef.current) {
+			clearTimeout(deploymentTimeoutRef.current);
+			deploymentTimeoutRef.current = null;
+		}
+
+		// Reset all state to initial values
+		setChatId(undefined);
+		setMessages([createAIMessage('main', 'Thinking...', true)]);
+		setBootstrapFiles([]);
+		setBlueprint(undefined);
+		setPreviewUrl(undefined);
+		setQuery(undefined);
+		setBehaviorType(getInitialBehaviorType());
+		setInternalProjectType(projectType);
+		setTemplateDetails(null);
+		setWebsocket(undefined);
+		setIsGeneratingBlueprint(false);
+		setIsBootstrapping(true);
+		setProjectStages(defaultStages);
+		setPhaseTimeline([]);
+		setFiles([]);
+		setTotalFiles(undefined);
+		setEdit(undefined);
+		setIsDeploying(false);
+		setCloudflareDeploymentUrl('');
+		setDeploymentError(undefined);
+		setRuntimeErrorCount(0);
+		setStaticIssueCount(0);
+		setIsDebugging(false);
+		setIsPreviewDeploying(false);
+		setIsRedeployReady(false);
+		setIsGenerationPaused(false);
+		setIsGenerating(false);
+		setIsPhaseProgressActive(false);
+		setIsThinking(false);
+		setShouldRefreshPreview(false);
+		setIsInitialStateRestored(false);
+		setQueuedRequests([]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [urlChatId]);
 
 	// Mount/unmount: enable/disable reconnection and clear pending retries
 	useEffect(() => {

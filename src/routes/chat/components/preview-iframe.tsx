@@ -49,6 +49,7 @@ export const PreviewIframe = forwardRef<HTMLIFrameElement, PreviewIframeProps>(
 
 		const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 		const hasRequestedRedeployRef = useRef(false);
+		const hasRequestedScreenshotRef = useRef(false);
 		const postLoadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 		// ====================================================================
 		// Core Loading Logic
@@ -146,7 +147,14 @@ export const PreviewIframe = forwardRef<HTMLIFrameElement, PreviewIframeProps>(
 				return;
 			}
 
+			// Skip if we've already requested a screenshot for this preview session
+			if (hasRequestedScreenshotRef.current) {
+				console.log('Screenshot already requested for this session, skipping');
+				return;
+			}
+
 			console.log('Requesting screenshot capture');
+			hasRequestedScreenshotRef.current = true;
 
 			try {
 				webSocket.send(JSON.stringify({
@@ -158,6 +166,7 @@ export const PreviewIframe = forwardRef<HTMLIFrameElement, PreviewIframeProps>(
 				}));
 			} catch (error) {
 				console.error('Failed to send screenshot request:', error);
+				hasRequestedScreenshotRef.current = false; // Allow retry on send failure
 			}
 		}, [webSocket]);
 
@@ -244,6 +253,7 @@ export const PreviewIframe = forwardRef<HTMLIFrameElement, PreviewIframeProps>(
 		const forceReload = useCallback(() => {
 			console.log('Force reloading preview');
 			hasRequestedRedeployRef.current = false;
+			hasRequestedScreenshotRef.current = false;
 			reachableCountRef.current = 0;
 
 			if (retryTimeoutRef.current) {
@@ -279,6 +289,7 @@ export const PreviewIframe = forwardRef<HTMLIFrameElement, PreviewIframeProps>(
 
 			console.log('Preview src changed, starting load:', src);
 			hasRequestedRedeployRef.current = false;
+			hasRequestedScreenshotRef.current = false;
 			reachableCountRef.current = 0;
 
 			if (retryTimeoutRef.current) {

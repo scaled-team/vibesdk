@@ -533,6 +533,16 @@ export default function Chat() {
 		}
 	}, [chatId, navigate]);
 
+	// Reset local view state when switching projects via sidebar
+	useEffect(() => {
+		hasSeenPreview.current = false;
+		hasSwitchedFile.current = false;
+		prevMarkdownCountRef.current = 0;
+		setView('editor');
+		setActiveFilePath(undefined);
+		setManualRefreshTrigger(0);
+	}, [urlChatId]);
+
 	useEffect(() => {
 		if (!edit) return;
 		if (files.some((file) => file.filePath === edit.filePath)) {

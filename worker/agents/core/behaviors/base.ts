@@ -47,10 +47,10 @@ import { InMemoryAnalyzer } from '../../../services/static-analysis';
 
 // Screenshot capture configuration
 const SCREENSHOT_CONFIG = {
-    PAGE_LOAD_TIMEOUT: 8000,     // 8s for page load (was 15s)
-    WAIT_FOR_TIMEOUT: 1000,      // 1s additional wait after network idle (was 2s)
-    MAX_RETRIES: 1,              // 1 retry = 2 total attempts (was 3)
-    RETRY_DELAY_BASE: 1000,      // 1s base delay between retries (was 2s)
+    PAGE_LOAD_TIMEOUT: 8000,     // 8s for page load
+    WAIT_FOR_TIMEOUT: 1000,      // 1s additional wait after network idle
+    MAX_RETRIES: 0,              // 0 retries = single attempt (screenshots are non-critical thumbnails)
+    RETRY_DELAY_BASE: 1000,      // 1s base delay between retries (unused with MAX_RETRIES=0)
     MIN_FILE_SIZE: 10000,        // 10KB minimum for valid screenshot
     MIN_ENTROPY: 2.0,            // Minimum entropy threshold
 };
