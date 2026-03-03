@@ -522,13 +522,11 @@ export function useChat({
 								updateStage('bootstrap', { status: 'completed' });
 								updateStage('blueprint', { status: 'active' });
 							}
-							parser.feed(obj.chunk);
-							try {
-								const partial = parser.finalize();
-								setBlueprint(partial);
-							} catch (e) {
-								logger.error('Error parsing JSON:', e, obj.chunk);
-							}
+                                                        parser.feed(obj.chunk);
+                                                        const partial = parser.tryFinalize();
+                                                        if (partial) {
+                                                                setBlueprint(partial);
+                                                        }
 						}
 						if (obj.agentId) {
 							result.agentId = obj.agentId;

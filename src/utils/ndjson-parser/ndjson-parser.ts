@@ -14,14 +14,22 @@ export async function* ndjsonStream(response: Response) {
 
         for (const line of lines) {
             if (line.trim()) {
-                yield JSON.parse(line);
+                try {
+                    yield JSON.parse(line);
+                } catch (e) {
+                    console.warn('Skipping malformed NDJSON line:', line.substring(0, 200), e);
+                }
             }
         }
     }
 
     // Handle leftover buffer
     if (buffer.trim()) {
-        yield JSON.parse(buffer);
+        try {
+            yield JSON.parse(buffer);
+        } catch (e) {
+            console.warn('Skipping malformed NDJSON buffer remainder:', buffer.substring(0, 200), e);
+        }
     }
 }
 
@@ -39,13 +47,13 @@ export class NDJSONStreamParser {
 
     processChunk(chunk: string): void {
         this.buffer += chunk;
-        
+
         // Handle both \n and \r\n line endings
         const lines = this.buffer.split(/\r?\n/);
-        
+
         // Keep the last partial line in the buffer
         this.buffer = lines.pop() || '';
-        
+
         // Process complete lines
         for (const line of lines) {
             if (line.trim()) {
@@ -65,9 +73,11 @@ export function createRepairingJSONParser() {
     let buffer = '';
 
     /* util – try JSON.parse without crashing -------------------------- */
-    const parse = (str: string) => { try { return JSON.parse(str); } catch { 
-        // pass
-    } };
+    const parse = (str: string) => {
+        try { return JSON.parse(str); } catch {
+            // pass
+        }
+    };
 
     /* STEP-1: close strings when required ----------------------------- */
     function closeStrings(src: string) {
@@ -152,20 +162,29 @@ export function createRepairingJSONParser() {
 
             if (obj) return obj;
 
-            txt = closeStrings(txt); 
+            txt = closeStrings(txt);
             obj = parse(txt)
             if (obj) return obj;
-            txt = stripCommas(txt); 
+            txt = stripCommas(txt);
             obj = parse(txt)
             if (obj) return obj;
             txt = balanceBrackets(txt);
             obj = parse(txt)
             if (obj) return obj;
-            txt = fixKeys(txt); 
+            txt = fixKeys(txt);
             obj = parse(txt)
             if (obj) return obj;
 
-            throw new Error('createRepairingJSONParser: unable to repair JSON');
+            throw new Error('createRepairingJSONParser: unable to repair JSON: ' + txt.substring(0, 200));
+        },
+
+        /** Like finalize(), but returns null instead of throwing on failure */
+        tryFinalize() {
+            try {
+                return this.finalize();
+            } catch {
+                return null;
+            }
         }
     };
 }
