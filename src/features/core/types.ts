@@ -71,6 +71,9 @@ export interface HeaderActionsProps extends FeatureContext {
 	onGitHubExportClick: () => void;
 	loadingConfigs: boolean;
 	onRequestConfigs: () => void;
+	onEnvVarsClick?: () => void;
+	viewport?: 'desktop' | 'tablet' | 'mobile';
+	onViewportChange?: (viewport: 'desktop' | 'tablet' | 'mobile') => void;
 }
 
 /**

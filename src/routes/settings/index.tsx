@@ -425,15 +425,15 @@ export default function SettingsPage() {
 
 	return (
 		<div className="min-h-screen bg-bg-3 relative">
-			<main className="container mx-auto px-4 py-8 max-w-4xl">
-				<div className="space-y-8">
+			<main className="mx-auto px-3 sm:px-4 py-4 sm:py-6 max-w-2xl">
+				<div className="space-y-4 sm:space-y-6">
 					{/* Page Header */}
-					<div>
-						<h1 className="text-4xl font-bold font-[departureMono] text-red-500">
-							SETTINGS
+					<div className="px-1">
+						<h1 className="text-2xl sm:text-3xl font-bold text-text-primary">
+							Settings
 						</h1>
-						<p className="text-text-tertiary mt-2">
-							Manage your account settings and preferences
+						<p className="text-text-tertiary text-sm mt-1">
+							Manage your builder preferences
 						</p>
 					</div>
 
@@ -525,54 +525,16 @@ export default function SettingsPage() {
 					</Card> */}
 
 					{/* Model Configuration Section */}
-					<Card id="model-configs">
+					<Card id="model-configs" className="rounded-xl">
 						<CardHeader variant="minimal">
-							<div className="flex items-center gap-3 border-b w-full py-3 text-text-primary">
-								{' '}
-								<Settings className="h-5 w-5" />
-								<div>
-									<CardTitle>
-										AI Model Configurations
-									</CardTitle>
-								</div>
+							<div className="flex items-center gap-3 border-b w-full py-2.5 text-text-primary">
+								<Settings className="h-4 w-4 sm:h-5 sm:w-5" />
+								<CardTitle className="text-base sm:text-lg">
+									AI Model Configurations
+								</CardTitle>
 							</div>
 						</CardHeader>
-						<CardContent className="space-y-6 px-6">
-							{/* Provider API Keys Integration */}
-							<div className="space-y-2 mt-6">
-								<h4 className="font-medium">
-									Provider API Keys
-								</h4>
-								<p className="text-sm text-text-tertiary">
-									AI provider API keys are managed in the "API
-									Keys & Secrets" section below. Configure
-									your OpenAI, Anthropic, Google AI, and
-									OpenRouter keys there.
-								</p>
-
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => {
-										const secretsSection =
-											document.getElementById('api-keys');
-										if (secretsSection) {
-											secretsSection.scrollIntoView({
-												behavior: 'smooth',
-												block: 'start',
-											});
-										}
-									}}
-									className="gap-2 shrink-0"
-								>
-														<Key className="h-4 w-4" />
-														API Keys
-								</Button>
-							</div>
-
-							<Separator />
-
-							{/* Model Configuration Tabs */}
+						<CardContent className="space-y-4 sm:space-y-6 px-3 sm:px-6">
 							<ModelConfigTabs
 								agentConfigs={agentConfigs}
 								modelConfigs={modelConfigs}
@@ -591,17 +553,15 @@ export default function SettingsPage() {
 					{/* User Secrets Vault Section */}
 					{/* <SecretsManager id="secrets" /> */}
 
-					<Card id="api-keys">
+					<Card id="api-keys" className="rounded-xl">
 						<CardHeader variant="minimal">
-							<div className="flex items-center gap-3 border-b w-full py-3 text-text-primary">
-								<Key className="h-5 w-5" />
-								<div>
-									<CardTitle>API Keys</CardTitle>
-								</div>
+							<div className="flex items-center gap-3 border-b w-full py-2.5 text-text-primary">
+								<Key className="h-4 w-4 sm:h-5 sm:w-5" />
+								<CardTitle className="text-base sm:text-lg">API Keys</CardTitle>
 							</div>
 						</CardHeader>
-						<CardContent className="space-y-4 mt-4 px-6">
-							<div className="flex items-start justify-between gap-4">
+						<CardContent className="space-y-4 mt-3 px-3 sm:px-6">
+							<div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
 								<div className="space-y-1">
 									<h4 className="font-medium text-sm">VibeSDK API Keys</h4>
 									<p className="text-sm text-text-secondary">
@@ -827,18 +787,16 @@ export default function SettingsPage() {
 					</Card>
 
 					{/* Security Section */}
-					<Card id="security">
+					<Card id="security" className="rounded-xl">
 						<CardHeader variant="minimal">
-							<div className="flex items-center gap-3 border-b w-full py-3 text-text-primary">
-								<Lock className="h-5 w-5" />
-								<div>
-									<CardTitle className="text-lg">
-										Security
-									</CardTitle>
-								</div>
+							<div className="flex items-center gap-3 border-b w-full py-2.5 text-text-primary">
+								<Lock className="h-4 w-4 sm:h-5 sm:w-5" />
+								<CardTitle className="text-base sm:text-lg">
+									Security
+								</CardTitle>
 							</div>
 						</CardHeader>
-						<CardContent className="space-y-3 mt-2 px-6">
+						<CardContent className="space-y-3 mt-2 px-3 sm:px-6">
 							{/* Connected Accounts */}
 							<div className="space-y-2">
 								<h4 className="font-medium">
@@ -923,12 +881,12 @@ export default function SettingsPage() {
 						</CardContent>
 					</Card>
 
-					<div className="space-y-4 p-3">
-						<h4 className="font-medium text-destructive">
+					<div className="space-y-3 p-3 rounded-xl border border-destructive/20 bg-destructive/5">
+						<h4 className="font-medium text-sm text-destructive">
 							Danger Zone
 						</h4>
 
-						<div className="flex items-center justify-between">
+						<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
 							<div>
 								<p className="font-medium text-text-primary">Delete Account</p>
 								<p className="text-sm text-text-tertiary">

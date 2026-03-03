@@ -22,6 +22,11 @@ import { fixUndefinedName } from './fixers/ts2304';
 import { fixMissingExportedMember } from './fixers/ts2305';
 import { fixImportExportTypeMismatch } from './fixers/ts2614';
 import { fixIncorrectNamedImport } from './fixers/ts2724';
+import { fixDidYouMeanTypo } from './fixers/ts2551';
+import { fixImplicitAnyParam } from './fixers/ts7006';
+import { fixTypeAssignmentMismatch } from './fixers/ts2322';
+import { fixPropertyDoesNotExist } from './fixers/ts2339';
+import { fixArgumentTypeMismatch } from './fixers/ts2345';
 
 
 // ============================================================================
@@ -130,7 +135,12 @@ function createFixerRegistry(): FixerRegistry {
     registry.set('TS2305', fixMissingExportedMember);
     registry.set('TS2614', fixImportExportTypeMismatch);
     registry.set('TS2724', fixIncorrectNamedImport);
-    
+    registry.set('TS2551', fixDidYouMeanTypo);
+    registry.set('TS7006', fixImplicitAnyParam);
+    registry.set('TS2322', fixTypeAssignmentMismatch);
+    registry.set('TS2339', fixPropertyDoesNotExist);
+    registry.set('TS2345', fixArgumentTypeMismatch);
+
     return registry;
 }
 
@@ -183,8 +193,13 @@ function sortFixOrder(issues: CodeIssue[]): CodeIssue[] {
         'TS2614': 3,
         'TS2724': 4,
         'TS2304': 5,
+        'TS2551': 6,
+        'TS2339': 7,
+        'TS2322': 8,
+        'TS2345': 8,
+        'TS7006': 9,
     };
-    
+
     return issues.sort((a, b) => {
         const aPriority = priorityMap[a.ruleId || ''] || 99;
         const bPriority = priorityMap[b.ruleId || ''] || 99;
@@ -233,6 +248,11 @@ function applyFixesSequentially(
             'TS2614': 3,
             'TS2724': 4,
             'TS2304': 5,
+            'TS2551': 6,
+            'TS2339': 7,
+            'TS2322': 8,
+            'TS2345': 8,
+            'TS7006': 9,
         };
         return (priorityMap[a] || 99) - (priorityMap[b] || 99);
     });

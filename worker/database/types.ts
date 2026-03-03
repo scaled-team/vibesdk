@@ -95,6 +95,8 @@ export interface BaseAppQueryOptions extends PaginationParams {
     sort?: AppSortOption;
     order?: SortOrder;
     period?: TimePeriod;
+    workspaceId?: string;
+    projectId?: string;
 }
 
 /**

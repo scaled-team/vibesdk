@@ -11,6 +11,8 @@ import { RateLimitExceededError, SecurityError } from 'shared/types/errors';
 import { ToolDefinition } from '../tools/types';
 import { validateAgentConstraints } from 'worker/api/controllers/modelConfig/constraintHelper';
 import { isValidAIModel } from './config.types';
+import { drizzle } from 'drizzle-orm/d1';
+import { auditLogs } from '../../database/schema';
 
 const logger = createLogger('InferenceUtils');
 
@@ -147,10 +149,39 @@ export async function executeInference<T extends z.AnyZodObject>(   {
     maxTokens = maxTokens || resolvedConfig.max_tokens || 16000;
     reasoning_effort = reasoning_effort || resolvedConfig.reasoning_effort;
 
-    // Exponential backoff for retries
-    const backoffMs = (attempt: number) => Math.min(500 * Math.pow(2, attempt), 10000);
+    // Exponential backoff for retries (fast: 500ms -> 1s -> 2s -> 4s cap)
+    const backoffMs = (attempt: number) => Math.min(500 * Math.pow(2, attempt), 4000);
 
     let useCheaperModel = false;
+    const startTime = Date.now();
+
+    // Fire-and-forget metrics logger — never blocks inference
+    const logMetrics = (success: boolean, attempts: number, finalModel?: string, errorType?: string) => {
+        try {
+            const latencyMs = Date.now() - startTime;
+            const db = drizzle(env.DB);
+            db.insert(auditLogs).values({
+                id: crypto.randomUUID(),
+                userId: context.metadata.userId,
+                entityType: 'inference_metric',
+                entityId: context.metadata.agentId,
+                action: agentActionName,
+                newValues: JSON.stringify({
+                    model: finalModel || modelName,
+                    latencyMs,
+                    success,
+                    attempts,
+                    usedCheaperModel: useCheaperModel,
+                    ...(errorType && { errorType }),
+                    ...(context.metadata.workspaceId && { workspaceId: context.metadata.workspaceId }),
+                    ...(context.metadata.projectId && { projectId: context.metadata.projectId }),
+                }),
+                createdAt: new Date(),
+            }).execute().catch(() => {}); // swallow DB errors silently
+        } catch {
+            // Never let metrics logging break inference
+        }
+    };
 
     for (let attempt = 0; attempt < retryLimit; attempt++) {
         try {
@@ -194,16 +225,19 @@ export async function executeInference<T extends z.AnyZodObject>(   {
                 runtimeOverrides: context.runtimeOverrides,
             });
             logger.info(`Successfully completed ${agentActionName} operation`);
-            // console.log(result);
+            const finalModel = useCheaperModel ? AIModels.GEMINI_2_5_FLASH : modelName;
+            logMetrics(true, attempt + 1, finalModel as string);
             return result;
         } catch (error) {
             if (error instanceof RateLimitExceededError || error instanceof SecurityError) {
+                logMetrics(false, attempt + 1, modelName as string, error.constructor.name);
                 throw error;
             }
-            
+
             // Check if cancellation - don't retry, propagate immediately
             if (error instanceof InferError && error.message.includes('cancelled')) {
                 logger.info(`${agentActionName} operation cancelled by user, not retrying`);
+                logMetrics(false, attempt + 1, modelName as string, 'cancelled');
                 throw error;
             }
             
@@ -214,11 +248,17 @@ export async function executeInference<T extends z.AnyZodObject>(   {
             );
 
             if (error instanceof InferError && !(error instanceof AbortError)) {
-                // If its an infer error and not an abort error, we can append the partial response to the list of messages and ask a cheaper model to retry the generation
+                // If its an infer error and not an abort error, we can append the partial response to the list of messages and ask a fallback model to retry the generation
                 if (error.response && error.response.length > 1000) {
                     messages.push(createAssistantMessage(error.response));
                     messages.push(createUserMessage(responseRegenerationPrompts));
-                    useCheaperModel = true;
+                    // Use configured fallback model instead of hardcoded cheap model
+                    if (resolvedConfig.fallbackModel && resolvedConfig.fallbackModel !== modelName) {
+                        logger.info(`InferError recovery: switching to fallback model: ${resolvedConfig.fallbackModel}`);
+                        modelName = resolvedConfig.fallbackModel;
+                    } else {
+                        useCheaperModel = true;
+                    }
                 }
             } else {
                 // Switch to fallback model if available
@@ -236,6 +276,7 @@ export async function executeInference<T extends z.AnyZodObject>(   {
             }
         }
     }
+    logMetrics(false, retryLimit, modelName as string, 'max_retries_exhausted');
     return null;
 }
 

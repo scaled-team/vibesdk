@@ -9,6 +9,9 @@ export function AppHeaderActions({
 	isGitHubExportReady,
 	onGitHubExportClick,
 	previewRef,
+	onEnvVarsClick,
+	viewport,
+	onViewportChange,
 }: HeaderActionsProps) {
 	return (
 		<BaseHeaderActions
@@ -19,6 +22,9 @@ export function AppHeaderActions({
 			onGitCloneClick={onGitCloneClick}
 			isGitHubExportReady={isGitHubExportReady}
 			onGitHubExportClick={onGitHubExportClick}
+			onEnvVarsClick={onEnvVarsClick}
+			viewport={viewport}
+			onViewportChange={onViewportChange}
 		/>
 	);
 }

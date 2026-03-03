@@ -32,7 +32,7 @@ export interface FixedIssue {
     /** Description of the fix that was applied */
     fixApplied: string;
     /** Type of fix that was applied */
-    fixType: 'import_fix' | 'export_fix' | 'stub_creation' | 'declaration_fix';
+    fixType: 'import_fix' | 'export_fix' | 'stub_creation' | 'declaration_fix' | 'typo_correction' | 'type_assertion' | 'annotation_fix';
 }
 
 /**

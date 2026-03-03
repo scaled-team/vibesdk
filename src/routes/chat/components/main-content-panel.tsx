@@ -1,8 +1,10 @@
-import { type RefObject, type ReactNode, Suspense, useState, useCallback } from 'react';
+import { type RefObject, type ReactNode, Suspense, lazy, useState, useCallback } from 'react';
 import { WebSocket } from 'partysocket';
-import { MonacoEditor } from '../../../components/monaco-editor/monaco-editor';
+
+const MonacoEditor = lazy(() => import('../../../components/monaco-editor/monaco-editor'));
+const MonacoDiffEditor = lazy(() => import('../../../components/monaco-editor/monaco-diff-editor'));
 import { motion } from 'framer-motion';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, GitCompareArrows } from 'lucide-react';
 import { Blueprint } from './blueprint';
 import { FileExplorer } from './file-explorer';
 import { PreviewIframe } from './preview-iframe';
@@ -17,6 +19,13 @@ import type { FileType, BlueprintType, BehaviorType, ModelConfigsInfo, TemplateD
 import type { ContentDetectionResult } from '../utils/content-detector';
 import type { GitHubExportHook } from '@/hooks/use-github-export';
 import type { Edit } from '../hooks/use-chat';
+import type { DeployProps, ViewportMode } from '@/components/shared/BaseHeaderActions';
+
+const VIEWPORT_SIZES: Record<ViewportMode, { width: number; height: number } | null> = {
+	desktop: null,
+	tablet: { width: 768, height: 1024 },
+	mobile: { width: 375, height: 667 },
+};
 
 interface MainContentPanelProps {
 	// View state
@@ -69,6 +78,12 @@ interface MainContentPanelProps {
 	// Refs
 	previewRef: RefObject<HTMLIFrameElement | null>;
 	editorRef: RefObject<HTMLDivElement | null>;
+
+	// Deploy
+	deploy?: DeployProps;
+
+	// Env vars
+	onEnvVarsClick?: () => void;
 }
 
 export function MainContentPanel(props: MainContentPanelProps) {
@@ -102,7 +117,16 @@ export function MainContentPanel(props: MainContentPanelProps) {
 		previewRef,
 		editorRef,
 		templateDetails,
+		deploy,
+		onEnvVarsClick,
 	} = props;
+
+	// Diff view toggle
+	const [showDiff, setShowDiff] = useState(false);
+	const hasDiff = activeFile?.previousContents !== undefined && activeFile?.previousContents !== activeFile?.fileContents;
+
+	// Viewport mode for preview resizing
+	const [viewport, setViewport] = useState<ViewportMode>('desktop');
 
 	// Feature-specific state management
 	const [featureState, setFeatureStateInternal] = useState<Record<string, unknown>>({});
@@ -171,8 +195,12 @@ export function MainContentPanel(props: MainContentPanelProps) {
 		// Get lazy-loaded preview component from feature registry
 		const FeaturePreviewComponent = featureRegistry.getLazyPreviewComponent(projectType);
 
+		// Viewport sizing
+		const viewportSize = VIEWPORT_SIZES[viewport];
+		const isConstrained = viewport !== 'desktop' && viewportSize;
+
 		// Fallback to default PreviewIframe if no feature-specific component
-		const previewContent = FeaturePreviewComponent ? (
+		const rawPreview = FeaturePreviewComponent ? (
 			<Suspense
 				fallback={
 					<div className="flex-1 w-full h-full flex items-center justify-center bg-bg-3">
@@ -199,19 +227,38 @@ export function MainContentPanel(props: MainContentPanelProps) {
 					onManualRefresh={onManualRefresh}
 					featureState={featureState}
 					setFeatureState={setFeatureState}
-					className="flex-1 w-full h-full border-0"
+					className="w-full h-full border-0"
 				/>
 			</Suspense>
 		) : (
 			<PreviewIframe
 				src={previewUrl}
 				ref={previewRef}
-				className="flex-1 w-full h-full border-0"
+				className="w-full h-full border-0"
 				title="Preview"
 				shouldRefreshPreview={shouldRefreshPreview}
 				manualRefreshTrigger={manualRefreshTrigger}
 				webSocket={websocket}
 			/>
+		);
+
+		const previewContent = isConstrained ? (
+			<div className="flex-1 flex items-start justify-center overflow-auto bg-bg-2/50 p-4">
+				<div
+					className="rounded-lg shadow-lg border border-border-primary/30 overflow-hidden bg-white"
+					style={{
+						width: viewportSize.width,
+						height: viewportSize.height,
+						maxWidth: '100%',
+					}}
+				>
+					{rawPreview}
+				</div>
+			</div>
+		) : (
+			<div className="flex-1 flex overflow-hidden">
+				{rawPreview}
+			</div>
 		);
 
 		// Get lazy-loaded header actions component from feature registry
@@ -244,6 +291,9 @@ export function MainContentPanel(props: MainContentPanelProps) {
 					onGitHubExportClick={githubExport.openModal}
 					loadingConfigs={loadingConfigs}
 					onRequestConfigs={onRequestConfigs}
+					onEnvVarsClick={onEnvVarsClick}
+					viewport={viewport}
+					onViewportChange={setViewport}
 				/>
 			</Suspense>
 		) : (
@@ -255,6 +305,10 @@ export function MainContentPanel(props: MainContentPanelProps) {
 				isGitHubExportReady={isGitHubExportReady}
 				onGitHubExportClick={githubExport.openModal}
 				previewRef={previewRef}
+				deploy={deploy}
+				onEnvVarsClick={onEnvVarsClick}
+				viewport={viewport}
+				onViewportChange={setViewport}
 			/>
 		);
 
@@ -322,6 +376,10 @@ export function MainContentPanel(props: MainContentPanelProps) {
 					isGitHubExportReady={isGitHubExportReady}
 					onGitHubExportClick={githubExport.openModal}
 					editorRef={editorRef}
+					deploy={deploy}
+					onEnvVarsClick={onEnvVarsClick}
+					viewport={viewport}
+					onViewportChange={setViewport}
 				/>
 			);
 		}
@@ -329,6 +387,15 @@ export function MainContentPanel(props: MainContentPanelProps) {
 		return renderViewWithHeader(
 			<div className="flex items-center gap-2">
 				<span className="text-sm font-mono text-text-50/70">{activeFile.filePath}</span>
+				{hasDiff && (
+					<button
+						className={`p-1 rounded transition-colors ${showDiff ? 'bg-accent/20 text-accent' : 'hover:bg-bg-2 text-text-primary/50'}`}
+						onClick={() => setShowDiff(!showDiff)}
+						title={showDiff ? 'Hide diff' : 'Show changes'}
+					>
+						<GitCompareArrows className="size-4" />
+					</button>
+				)}
 				{previewUrl && <Copy text={previewUrl} />}
 			</div>,
 			<div className="flex-1 relative">
@@ -339,22 +406,33 @@ export function MainContentPanel(props: MainContentPanelProps) {
 						onFileClick={onFileClick}
 					/>
 					<div className="flex-1">
-						<MonacoEditor
-							className="h-full"
-							createOptions={{
-								value: activeFile.fileContents || '',
-								language: activeFile.language || 'plaintext',
-								readOnly: true,
-								minimap: { enabled: false },
-								lineNumbers: 'on',
-								scrollBeyondLastLine: false,
-								fontSize: 13,
-								theme: 'vibesdk',
-								automaticLayout: true,
-							}}
-							find={edit?.filePath === activeFile.filePath ? edit.search : undefined}
-							replace={edit?.filePath === activeFile.filePath ? edit.replacement : undefined}
-						/>
+						<Suspense fallback={<div className="h-full w-full bg-bg-3" />}>
+							{showDiff && hasDiff ? (
+								<MonacoDiffEditor
+									className="h-full"
+									original={activeFile.previousContents || ''}
+									modified={activeFile.fileContents || ''}
+									language={activeFile.language || 'plaintext'}
+								/>
+							) : (
+								<MonacoEditor
+									className="h-full"
+									createOptions={{
+										value: activeFile.fileContents || '',
+										language: activeFile.language || 'plaintext',
+										readOnly: true,
+										minimap: { enabled: false },
+										lineNumbers: 'on',
+										scrollBeyondLastLine: false,
+										fontSize: 13,
+										theme: 'vibesdk',
+										automaticLayout: true,
+									}}
+									find={edit?.filePath === activeFile.filePath ? edit.search : undefined}
+									replace={edit?.filePath === activeFile.filePath ? edit.replacement : undefined}
+								/>
+							)}
+						</Suspense>
 					</div>
 				</div>
 			</div>,
@@ -366,6 +444,8 @@ export function MainContentPanel(props: MainContentPanelProps) {
 				isGitHubExportReady={isGitHubExportReady}
 				onGitHubExportClick={githubExport.openModal}
 				editorRef={editorRef}
+				deploy={deploy}
+				onEnvVarsClick={onEnvVarsClick}
 			/>
 		);
 	};

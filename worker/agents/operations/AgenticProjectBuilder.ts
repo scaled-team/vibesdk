@@ -32,6 +32,7 @@ import { createExecCommandsTool } from '../tools/toolkit/exec-commands';
 import { createWaitTool } from '../tools/toolkit/wait';
 import { createGitTool } from '../tools/toolkit/git';
 import { createGenerateImagesTool } from '../tools/toolkit/generate-images';
+import { toolWebSearchDefinition } from '../tools/toolkit/web-search';
 
 export interface AgenticProjectBuilderInputs {
     query: string;
@@ -41,6 +42,7 @@ export interface AgenticProjectBuilderInputs {
     projectType: ProjectType;
     selectedTemplate?: string;
     operationalMode: 'initial' | 'followup';
+    completedMilestones?: string[];
     conversationHistory?: ConversationMessage[];
     streamCb?: (chunk: string) => void;
     toolRenderer: RenderToolCall;
@@ -67,26 +69,12 @@ const getUserPrompt = (
     query: string,
     projectName: string,
     fileSummaries: string,
-    templateInfo?: string
+    templateInfo?: string,
+    operationalMode?: 'initial' | 'followup'
 ): string => {
     return `## Build Task
 **Project Name**: ${projectName}
 **User Request**: ${query}
-
-${
-//     blueprint ? `## Project Blueprint
-
-// The following blueprint defines the structure, features, and requirements for this project:
-
-// \`\`\`json
-// ${JSON.stringify(blueprint, null, 2)}
-// \`\`\`
-
-// **Use this blueprint to guide your implementation.** It outlines what needs to be built.` : `## Note
-
-// No blueprint provided. Design the project structure based on the user request above.`
-''
-}
 
 ${templateInfo ? `## Template Context
 
@@ -101,7 +89,9 @@ ${fileSummaries ? `## Current Codebase
 ${fileSummaries}` : `## Starting Fresh
 
 This is a new project. Start from the template or scratch.`}
-Begin building.`;
+${operationalMode === 'followup'
+    ? 'Continue building from where you left off. Review conversation history and the milestone progress in your instructions to avoid repeating work.'
+    : 'Begin building.'}`;
 };
 
 export class AgenticProjectBuilderOperation extends AgentOperationWithTools<
@@ -160,10 +150,28 @@ export class AgenticProjectBuilderOperation extends AgentOperationWithTools<
         const isPresentationProject = projectType === 'presentation';
         const needsSandbox = !isPresentationProject && (hasTSX || projectType === 'app');
 
+        const completedMilestones = inputs.completedMilestones || [];
+
         const dynamicHints = [
             !hasPlan
                 ? '- No plan detected: Start with generate_blueprint (optionally with prompt parameter) to establish PRD (title, projectName, description, colorPalette, frameworks, plan).'
-                : '- Plan detected: proceed to implement milestones using generate_files/regenerate_file.',
+                : (() => {
+                    const plan = (blueprint as AgenticBlueprint).plan;
+                    const progress = plan.map((milestone, i) => {
+                        const isDone = completedMilestones.some(c =>
+                            c === milestone || milestone.toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(milestone.toLowerCase())
+                        );
+                        return `  ${i + 1}. ${isDone ? '[DONE]' : '[TODO]'} ${milestone}`;
+                    }).join('\n');
+                    const nextIdx = plan.findIndex(m =>
+                        !completedMilestones.some(c =>
+                            c === m || m.toLowerCase().includes(c.toLowerCase()) || c.toLowerCase().includes(m.toLowerCase())
+                        )
+                    );
+                    const nextMilestone = nextIdx >= 0 ? plan[nextIdx] : null;
+                    return `- Plan progress (${completedMilestones.length}/${plan.length} milestones):\n${progress}` +
+                        (nextMilestone ? `\n- NEXT MILESTONE: "${nextMilestone}" — implement this next.` : '\n- All milestones complete. Review and finalize.');
+                })(),
             needsSandbox && !hasTemplate
                 ? '- Interactive project without template: Use init_suitable_template() to let AI select and import best matching template before first deploy.'
                 : '',
@@ -224,6 +232,7 @@ export class AgenticProjectBuilderOperation extends AgentOperationWithTools<
             inputs.projectName,
             session.fileSummaries,
             session.templateInfo,
+            inputs.operationalMode,
         );
 
         const system = createSystemMessage(systemPrompt);
@@ -262,6 +271,8 @@ export class AgenticProjectBuilderOperation extends AgentOperationWithTools<
             createGitTool(session.agent, logger),
             // WIP: images
             createGenerateImagesTool(session.agent, logger),
+            // Documentation & reference lookup during code generation
+            toolWebSearchDefinition,
         ];
 
         if (!inputs.selectedTemplate || inputs.selectedTemplate === 'scratch') {

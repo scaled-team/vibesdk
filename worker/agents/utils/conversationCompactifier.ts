@@ -9,9 +9,9 @@ import type { ChatCompletionMessageFunctionToolCall } from 'openai/resources';
  * Compactification configuration constants
  */
 export const COMPACTIFICATION_CONFIG = {
-    MAX_TURNS: 40,            // Trigger after 40 conversation turns
-    MAX_ESTIMATED_TOKENS: 100000,
-    PRESERVE_RECENT_MESSAGES: 10, // Always keep last 10 messages uncompacted
+    MAX_TURNS: 30,            // Trigger after 30 conversation turns (balanced from 20/40)
+    MAX_ESTIMATED_TOKENS: 75000,  // ~75K tokens threshold (balanced from 50K/100K)
+    PRESERVE_RECENT_MESSAGES: 10, // Keep last 10 messages uncompacted for context continuity
     CHARS_PER_TOKEN: 4,         // Rough estimation: 1 token ≈ 4 characters
 } as const;
 
@@ -157,6 +157,14 @@ async function generateConversationSummary(
 3. Highlight the current state of the project
 4. Preserve critical technical details and decisions made
 5. Maintain chronological flow of major changes and developments
+
+IMPORTANT: End your summary with a structured section exactly like this:
+
+## Milestone Progress
+- Completed: [list each completed milestone/phase name from generate_files calls]
+- In Progress: [current milestone being worked on, if any]
+- Pending: [remaining milestones not yet started]
+- Files Generated: [approximate total count]
 
 Format your summary as a cohesive, well-structured narrative. Focus on what matters for understanding the project's evolution and current state.
 

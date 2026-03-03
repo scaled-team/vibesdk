@@ -45,17 +45,18 @@ const SIMPLE_SYSTEM_PROMPT = `<ROLE>
     • **Essential Only:** Include only the frameworks/libraries that are truly needed
     • **Clear Plan:** Provide a logical step-by-step implementation sequence
     
-    ## Color Palette
-    • Choose 2-3 base RGB colors that work well together
-    • Consider the application's purpose and mood
-    • Ensure good contrast for accessibility
-    • Only specify base colors, not shades
+    ## Color Palette & Design Tokens
+    • Choose 2-3 base RGB colors from Tailwind's built-in families (slate, blue, indigo, violet, amber, emerald, etc.)
+    • Assign roles: primary (brand/actions), accent (highlights), neutral (text/borders/backgrounds)
+    • Pick ONE Google Font (Inter, DM Sans, Plus Jakarta Sans, Manrope, Outfit, or Space Grotesk) for the project
+    • Ensure good contrast for accessibility — light text on dark, dark text on light
+    • Plan consistent spacing using Tailwind's 4px grid (gap-2, gap-4, p-4, p-6)
     
     ## Frameworks & Dependencies
     • Build on the template's existing dependencies
     • Only add libraries that are essential for the requested features
     • Prefer batteries-included libraries that work out-of-the-box
-    • No libraries requiring API keys or complex configuration
+    • Libraries requiring API keys are allowed — use placeholder test keys (e.g. \`pk_test_PLACEHOLDER\`) or environment variable references so the user can swap in real credentials after export
     
     ## Implementation Plan
     • Break down the work into 5-8 logical steps
@@ -107,26 +108,49 @@ const PHASIC_SYSTEM_PROMPT = `<ROLE>
 </GOAL>
 
 <INSTRUCTIONS>
-    ## Design System & Aesthetics
-    • **Color Palette & Visual Identity:** Choose a sophisticated, modern color palette that creates visual hierarchy and emotional connection. Specify primary, secondary, accent, neutral, and semantic colors (success, warning, error) with exact usage guidelines. Consider color psychology and brand personality.
-    • **Typography System:** Design a comprehensive typography scale with clear hierarchy - headings (h1-h6), body text, captions, labels. Specify font weights, line heights, letter spacing. Use system fonts or web-safe fonts for performance. Plan for readability and visual appeal.
-    • **Spacing & Layout System:** All layout spacing (margins, padding, gaps) MUST use Tailwind's spacing scale (4px increments). Plan consistent spacing patterns - component internal spacing, section gaps, page margins. Create visual rhythm and breathing room.
-    • **Component Design System:** Design beautiful, consistent UI components with:
-        - **Interactive States:** hover, focus, active, disabled states for all interactive elements
-        - **Loading States:** skeleton loaders, spinners, progress indicators
-        - **Feedback Systems:** success/error messages, tooltips, notifications
-        - **Micro-interactions:** smooth transitions, subtle animations, state changes
-    • **The tailwind.config.js and css styles provided are foundational. Extend thoughtfully:**
-        - **Preserve all existing classes in tailwind.config.js** - extend by adding new ones alongside existing definitions
-        - Ensure generous margins and padding around the entire application
-        - Plan for proper content containers and max-widths
-        - Design beautiful spacing that works across all screen sizes
-    • **Layout Excellence:** Design layouts that are both beautiful and functional:
-        - Clear visual hierarchy and information architecture
-        - Generous white space and breathing room
-        - Balanced proportions and golden ratio principles
-        - Mobile-first responsive design that scales beautifully
-    ** Lay these visual design instructions out explicitly throughout the blueprint **
+    ## 1. Design System First — Define Tokens Before Code
+    Before describing any UI, lock in a cohesive design system:
+
+    **Color Tokens** — Pick ONE Tailwind built-in color family per role:
+    • Primary: e.g. indigo (indigo-50 → indigo-950) — brand actions, links, focus rings
+    • Secondary/Accent: e.g. amber or violet — highlights, badges, CTAs
+    • Neutral: slate, zinc, stone, or gray — text, borders, backgrounds, cards
+    • Semantic: green for success, red for error/destructive, yellow for warning
+    • Surface layers: background (neutral-50/neutral-950 dark), card (white/neutral-900 dark), elevated (white/neutral-800 dark with shadow)
+    Put the 2-3 base RGB values in the colorPalette field. In uiDesign, specify the FULL token mapping (which Tailwind shade for headings, body, muted text, borders, hover states).
+
+    **Typography Tokens** — Pick ONE Google Font (Inter, Plus Jakarta Sans, DM Sans, Manrope, Outfit, or Space Grotesk) and define the hierarchy:
+    • Display/Hero: text-4xl sm:text-5xl font-bold tracking-tight
+    • H1: text-3xl font-bold tracking-tight
+    • H2: text-2xl font-semibold
+    • H3: text-lg font-semibold
+    • Body: text-sm or text-base font-normal leading-relaxed
+    • Caption/Label: text-xs font-medium text-muted-foreground uppercase tracking-wide
+    Specify in uiDesign so the coder applies consistent typography everywhere.
+
+    **Spacing Rhythm** — Use Tailwind 4px grid consistently:
+    • Page padding: px-4 sm:px-6 lg:px-8, py-8 sm:py-12
+    • Section gaps: space-y-12 sm:space-y-16
+    • Card padding: p-4 sm:p-6, gap-4
+    • Component internal: gap-2 to gap-3
+    • Max content width: max-w-7xl mx-auto
+
+    **Component States** — Every interactive element must define:
+    • Hover: subtle bg shift or scale, smooth transition-colors duration-150
+    • Focus: ring-2 ring-primary/50 ring-offset-2 outline-none
+    • Active/Pressed: slight scale-[0.98] or darker shade
+    • Disabled: opacity-50 pointer-events-none
+    • Loading: skeleton pulse animation or spinner, NEVER empty blank space
+    • Empty state: illustration or icon + helpful message + CTA
+
+    **Tailwind Config Rule:** Preserve ALL existing classes in tailwind.config.js — EXTEND by adding new keys alongside existing definitions, never replace.
+
+    ## 2. Data Shape — Model Entities Before Building UI
+    Before describing views or components, define the data:
+    • **Entities:** List every core entity (e.g. User, Product, Order) with key properties and TypeScript types
+    • **Relationships:** How entities connect (one-to-many, many-to-many, belongs-to)
+    • **Sample Data:** Plan realistic, polished mock data — real names, plausible numbers, varied states. This makes the demo feel production-quality, not placeholder-y.
+    • Include this data model in dataFlow and architecture.dataFlow fields so the coder builds coherent state management from the start.
 
     ${PROMPT_UTILS.UI_NON_NEGOTIABLES_V3}
 
@@ -134,7 +158,7 @@ const PHASIC_SYSTEM_PROMPT = `<ROLE>
 
     ## Frameworks & Dependencies
     • Choose an exhaustive set of well-known libraries, components and dependencies that can be used to build the application with as little effort as possible.
-        - **Select libraries that work out-of-the-box** without requiring API keys or environment variable configuration
+        - **Select libraries that best fit the requirements** — if a library requires API keys, use placeholder test keys or environment variable references so the user can configure real credentials after export
         - Provide an exhaustive list of libraries, components and dependencies that can help in development so that the devs have all the tools they would ever need.
         - Focus on including libraries with batteries included so that the devs have to do as little as possible.
 
@@ -172,11 +196,13 @@ const PHASIC_SYSTEM_PROMPT = `<ROLE>
 </INSTRUCTIONS>
 
 <KEY GUIDELINES>
-    • **Ultra think:** Do thorough thinking internally first before writing the blueprint. Your planning and design should be meticulous and thorough in every detail. The final blueprint should be concise, information dense and well thought out and not overly verbose. It should be explicit and to the point.
+    • **Design Tokens First, Then UI:** In uiDesign, define the complete design token system BEFORE describing any component. The coder will reference these tokens everywhere. Format: color roles → typography scale → spacing rhythm → component states. This is the single most important quality lever.
+    • **Data Shape First, Then Views:** In dataFlow and architecture.dataFlow, define entities, properties, relationships, and sample data BEFORE describing views. The coder builds state management from this. Realistic sample data (real names, plausible numbers, varied states) makes the demo feel production-quality.
+    • **Ultra think:** Do thorough thinking internally first before writing the blueprint. The final blueprint should be concise, information dense and well thought out. Be explicit and to the point.
     • **Completeness is Crucial:** The AI coder relies *solely* on this blueprint. Leave no ambiguity.
     • **Precision in UI/Layout:** Define visual structure explicitly. Use terms like "flex row," "space-between," "grid 3-cols," "padding-4," "margin-top-2," "width-full," "max-width-lg," "text-center." Specify responsive behavior.
     • **Explicit Logic:** Detail application logic, state transitions, and data transformations clearly.
-    • **VISUAL MASTERPIECE FOCUS:** Aim for a product that users will love to show off - visually stunning, professionally crafted, with obsessive attention to detail. Make it a true piece of interactive art that demonstrates exceptional design skill.
+    • **VISUAL MASTERPIECE FOCUS:** Aim for a product that users will love to show off - visually stunning, professionally crafted, with obsessive attention to detail.
     • **TEMPLATE FOUNDATION:** Build upon the \`<STARTING TEMPLATE>\` while transforming it into something visually extraordinary:
         - Suggest premium UI libraries, animation packages, and visual enhancement tools
         - Recommend sophisticated icon libraries, illustration sets, and visual assets
@@ -243,9 +269,11 @@ const LITE_PHASIC_SYSTEM_PROMPT = `<ROLE>
 <GOAL>
     - A professional project name
     - A brief description
-    - A simple color palette (2-3 colors)
+    - A cohesive color palette (2-3 colors from Tailwind families like indigo, slate, amber) with role assignments (primary, accent, neutral)
+    - A font choice (ONE Google Font: Inter, DM Sans, Plus Jakarta Sans, Manrope, Outfit, or Space Grotesk)
     - Essential frameworks needed beyond the template
-    - A concise UI/UX description and user flow
+    - A concise UI/UX description with design tokens (colors, typography hierarchy, spacing rhythm) and user flow
+    - Data entities and their relationships (define the data shape before describing UI)
     - Key pitfalls to avoid (max 5)
     - The initial implementation phase with file list
     Build upon the provided template. Use existing components and patterns.
@@ -255,7 +283,7 @@ const LITE_PHASIC_SYSTEM_PROMPT = `<ROLE>
     ${PROMPT_UTILS.UI_NON_NEGOTIABLES_V3}
 
     ## Frameworks & Dependencies
-    - Choose libraries that work out-of-the-box without API keys
+    - Choose the best libraries for the job — use placeholder test keys or env vars for any that require API keys
     - Keep simple applications simple: 1-2 files with minimal abstraction
     - Build upon the template's existing dependencies
 
@@ -329,6 +357,8 @@ interface BaseBlueprintGenerationArgs {
     env: Env;
     inferenceContext: InferenceContext;
     query: string;
+    /** Optional workspace context from Delegate (markdown-formatted) */
+    context?: string;
     language: string;
     frameworks: string[];
     projectType: ProjectType;
@@ -357,7 +387,7 @@ export async function generateBlueprint(args: AgenticBlueprintGenerationArgs): P
 export async function generateBlueprint(
     args: PhasicBlueprintGenerationArgs | AgenticBlueprintGenerationArgs
 ): Promise<Blueprint> {
-    const { env, inferenceContext, query, language, frameworks, templateDetails, templateMetaInfo, images, stream, projectType } = args;
+    const { env, inferenceContext, query, context, language, frameworks, templateDetails, templateMetaInfo, images, stream, projectType } = args;
     const isAgentic = !templateDetails || !templateMetaInfo;
     
     try {
@@ -398,13 +428,17 @@ export async function generateBlueprint(
             dependencies: templateDetails?.deps,
         }));
 
+        // Build user message with optional workspace context from Delegate
+        const contextSection = context ? `\nWORKSPACE CONTEXT:\n${context}\n\n` : '';
+        const clientRequestText = `${contextSection}CLIENT REQUEST: "${query}"`;
+
         const userMessage = images && images.length > 0
             ? createMultiModalUserMessage(
-                `CLIENT REQUEST: "${query}"`,
-                await imagesToBase64(env, images), 
+                clientRequestText,
+                await imagesToBase64(env, images),
                 'high'
               )
-            : createUserMessage(`CLIENT REQUEST: "${query}"`);
+            : createUserMessage(clientRequestText);
 
         const messages = [
             systemPromptMessage,

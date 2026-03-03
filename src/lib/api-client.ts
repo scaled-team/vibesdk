@@ -4,7 +4,7 @@
  * Features 401 response interception to trigger authentication modals
  */
 
-import type{
+import type {
 	ApiResponse,
 	AppsListData,
 	PublicAppsData,
@@ -128,6 +128,8 @@ interface UserAppsParams extends PaginationParams {
 	visibility?: 'private' | 'public' | 'team' | 'board';
 	status?: 'generating' | 'completed';
 	teamId?: string;
+	workspaceId?: string;
+	projectId?: string;
 }
 
 /**
@@ -191,7 +193,7 @@ class ApiClient {
 				method: 'GET',
 				credentials: 'include',
 			});
-			
+
 			if (response.ok) {
 				const data: ApiResponse<CsrfTokenResponseData> = await response.json();
 				if (data.data?.token) {
@@ -234,12 +236,12 @@ class ApiClient {
 		if (!['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase())) {
 			return true;
 		}
-		
+
 		// Fetch new token if none exists or current one is expired
 		if (!this.csrfTokenInfo || this.isCSRFTokenExpired()) {
 			return await this.fetchCsrfToken();
 		}
-		
+
 		return true;
 	}
 
@@ -288,7 +290,7 @@ class ApiClient {
 	private async request<T>(
 		endpoint: string,
 		options: RequestOptions = {},
-        noToast: boolean = false,
+		noToast: boolean = false,
 	): Promise<ApiResponse<T>> {
 		const { data } = await this.requestRaw<T>(endpoint, options, false, noToast);
 		if (!data) {
@@ -306,10 +308,10 @@ class ApiClient {
 		endpoint: string,
 		options: RequestOptions = {},
 		isRetry: boolean = false,
-        noToast: boolean = false,
+		noToast: boolean = false,
 	): Promise<{ response: Response; data: ApiResponse<T> | null }> {
 		this.ensureSessionToken();
-		
+
 		if (!await this.ensureCsrfToken(options.method || 'GET')) {
 			throw new ApiError(
 				500,
@@ -339,61 +341,61 @@ class ApiClient {
 
 		try {
 			const response = await fetch(url, config);
-			
+
 			// For streaming responses, skip JSON parsing if response is ok
 			if (options.skipJsonParsing && response.ok) {
 				return { response, data: null };
 			}
-			
+
 			const data = await response.json() as ApiResponse<T>;
 
 			if (!response.ok) {
-                if (
-                    response.status === 401 &&
-                    globalAuthModalTrigger &&
-                    this.shouldTriggerAuthModal(endpoint)
-                ) {
-                    const authContext = this.getAuthContextForEndpoint(endpoint);
-                    globalAuthModalTrigger(authContext);
-                }
+				if (
+					response.status === 401 &&
+					globalAuthModalTrigger &&
+					this.shouldTriggerAuthModal(endpoint)
+				) {
+					const authContext = this.getAuthContextForEndpoint(endpoint);
+					globalAuthModalTrigger(authContext);
+				}
 
-                const errorData = data.error;
-                if (errorData && errorData.type) {
-                       // Send a toast notification for typed errors
-                    if (!noToast) {
-                        toast.error(errorData.message);
-                    }
-                    switch (errorData.type) {
-                        case SecurityErrorType.CSRF_VIOLATION:
-                            // Handle CSRF failures with retry
-                            if (response.status === 403 && !isRetry) {
-                                // Clear expired token and retry with fresh one
-                                this.csrfTokenInfo = null;
-                                return this.requestRaw(endpoint, options, true);
-                            }
-                            break;
-                        case SecurityErrorType.RATE_LIMITED:
-                            // Handle rate limiting
-                            console.log('Rate limited', errorData);
-                            throw RateLimitExceededError.fromRateLimitError(errorData as unknown as RateLimitError);
-                        default:
-                            // Security error
-                            throw new SecurityError(errorData.type, errorData.message);
-                        }
-                    }
-                    console.log("Came here");
+				const errorData = data.error;
+				if (errorData && errorData.type) {
+					// Send a toast notification for typed errors
+					if (!noToast) {
+						toast.error(errorData.message);
+					}
+					switch (errorData.type) {
+						case SecurityErrorType.CSRF_VIOLATION:
+							// Handle CSRF failures with retry
+							if (response.status === 403 && !isRetry) {
+								// Clear expired token and retry with fresh one
+								this.csrfTokenInfo = null;
+								return this.requestRaw(endpoint, options, true);
+							}
+							break;
+						case SecurityErrorType.RATE_LIMITED:
+							// Handle rate limiting
+							console.log('Rate limited', errorData);
+							throw RateLimitExceededError.fromRateLimitError(errorData as unknown as RateLimitError);
+						default:
+							// Security error
+							throw new SecurityError(errorData.type, errorData.message);
+					}
+				}
+				console.log("Came here");
 
-                    throw new ApiError(
-                        response.status,
-                        response.statusText,
-                        data.error?.message || data.message || 'Request failed',
-                        endpoint,
-                    );
+				throw new ApiError(
+					response.status,
+					response.statusText,
+					data.error?.message || data.message || 'Request failed',
+					endpoint,
+				);
 			}
 
-		    return { response, data };
+			return { response, data };
 		} catch (error) {
-            console.error(error);
+			console.error(error);
 			if (error instanceof ApiError || error instanceof RateLimitExceededError || error instanceof SecurityError) {
 				throw error;
 			}
@@ -476,10 +478,15 @@ class ApiClient {
 	async createApp(data: {
 		title: string;
 		description?: string;
+		workspaceId?: string;
+		projectId?: string;
 	}): Promise<ApiResponse<CreateAppData>> {
+		const workspaceId = data.workspaceId || localStorage.getItem('vibesdk_workspaceId') || undefined;
+		const projectId = data.projectId || localStorage.getItem('vibesdk_projectId') || undefined;
+
 		return this.request<CreateAppData>('/api/apps', {
 			method: 'POST',
-			body: data,
+			body: { ...data, workspaceId, projectId },
 		});
 	}
 
@@ -555,7 +562,7 @@ class ApiClient {
 	// /**
 	//  * Fork an app
 	//  */
-    // DISABLED: Has been disabled for initial alpha release, for security reasons
+	// DISABLED: Has been disabled for initial alpha release, for security reasons
 	// async forkApp(appId: string): Promise<ApiResponse<ForkAppData>> {
 	// 	return this.request<ForkAppData>(`/api/apps/${appId}/fork`, {
 	// 		method: 'POST',
@@ -585,6 +592,11 @@ class ApiClient {
 		if (params?.status) queryParams.set('status', params.status);
 		if (params?.teamId) queryParams.set('teamId', params.teamId);
 
+		const wsId = params?.workspaceId || localStorage.getItem('vibesdk_workspaceId');
+		const pId = params?.projectId || localStorage.getItem('vibesdk_projectId');
+		if (wsId) queryParams.set('workspaceId', wsId);
+		if (pId) queryParams.set('projectId', pId);
+
 		const endpoint = `/api/user/apps${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
 		return this.request<UserAppsData>(endpoint);
 	}
@@ -601,14 +613,14 @@ class ApiClient {
 				false,
 				true,
 			);
-			
+
 			// Check if response is ok
 			if (!response.ok) {
 				// Parse error response if available
 				const errorMessage = data?.error?.message || `Agent creation failed with status: ${response.status}`;
 				throw new Error(errorMessage);
 			}
-			
+
 			return {
 				success: true,
 				stream: response
@@ -617,8 +629,8 @@ class ApiClient {
 			// Handle any network or parsing errors
 			const errorMessage = error instanceof Error ? error.message : 'Failed to create agent session';
 			toast.error(errorMessage);
-			
-            throw new Error(errorMessage);
+
+			throw new Error(errorMessage);
 		}
 	}
 
@@ -950,7 +962,7 @@ class ApiClient {
 		description?: string;
 		isPrivate?: boolean;
 		agentId: string;
-	}): Promise<ApiResponse<{ 
+	}): Promise<ApiResponse<{
 		authUrl?: string;
 		success?: boolean;
 		repositoryUrl?: string;

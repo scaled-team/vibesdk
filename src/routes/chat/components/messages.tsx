@@ -1,4 +1,4 @@
-import { AIAvatar } from '../../../components/icons/logos';
+
 import clsx from 'clsx';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -19,7 +19,7 @@ function sanitizeMessageForDisplay(message: string): string {
 
 export function UserMessage({ message }: { message: string }) {
 	const sanitizedMessage = sanitizeMessageForDisplay(message);
-	
+
 	return (
 		<div className="flex gap-3">
 			<div className="align-text-top pl-1">
@@ -35,7 +35,7 @@ export function UserMessage({ message }: { message: string }) {
 	);
 }
 
-type ContentItem = 
+type ContentItem =
 	| { type: 'text'; content: string; key: string }
 	| { type: 'tool'; event: ToolEvent; key: string };
 
@@ -76,7 +76,7 @@ function extractTextContent(content: unknown): string {
 
 function convertToToolEvent(msg: ConversationMessage, idx: number): ToolEvent | null {
 	if (msg.role !== 'tool' || !('name' in msg) || !msg.name) return null;
-	
+
 	return {
 		name: msg.name,
 		status: 'success',
@@ -85,20 +85,20 @@ function convertToToolEvent(msg: ConversationMessage, idx: number): ToolEvent | 
 	};
 }
 
-export function MessageContentRenderer({ 
-	content, 
-	toolEvents = [] 
-}: { 
+export function MessageContentRenderer({
+	content,
+	toolEvents = []
+}: {
 	content: string;
 	toolEvents?: ToolEvent[];
 }) {
 	const inlineToolEvents = toolEvents.filter(ev => ev.contentLength !== undefined)
 		.sort((a, b) => (a.contentLength ?? 0) - (b.contentLength ?? 0));
-	
+
 	const orderedContent = buildOrderedContent(content, inlineToolEvents);
-	
+
 	if (orderedContent.length === 0) return null;
-	
+
 	return (
 		<div className="flex flex-col gap-2">
 			{orderedContent.map((item) => (
@@ -128,7 +128,7 @@ function DeepDebugTranscript({ transcript }: { transcript: ConversationMessage[]
 			}
 		}
 	});
-	
+
 	return (
 		<div className="flex flex-col gap-3 p-3 rounded-md bg-surface-tertiary/50 border-l-2 border-accent/30">
 			<div className="flex items-center gap-2 text-xs font-medium text-accent">
@@ -137,10 +137,10 @@ function DeepDebugTranscript({ transcript }: { transcript: ConversationMessage[]
 			</div>
 			{transcript.map((msg, idx) => {
 				if (msg.role === 'tool') return null; // Tool results rendered with assistant messages
-				
+
 				const text = extractTextContent(msg.content);
 				if (!text) return null;
-				
+
 				if (msg.role === 'assistant') {
 					// Match tool_calls with their results
 					const toolEvents: ToolEvent[] = msg.tool_calls?.map(tc => {
@@ -153,14 +153,14 @@ function DeepDebugTranscript({ transcript }: { transcript: ConversationMessage[]
 							contentLength: 0,
 						};
 					}) || [];
-					
+
 					return (
 						<div key={`${msg.conversationId}-${idx}`} className="text-xs">
 							<MessageContentRenderer content={text} toolEvents={toolEvents} />
 						</div>
 					);
 				}
-				
+
 				return null;
 			})}
 		</div>
@@ -170,12 +170,12 @@ function DeepDebugTranscript({ transcript }: { transcript: ConversationMessage[]
 function ToolResultRenderer({ result, toolName }: { result: string; toolName: string }) {
 	try {
 		const parsed = JSON.parse(result);
-		
+
 		// Special handling for deep_debug transcript
 		if (toolName === 'deep_debug' && Array.isArray(parsed.transcript)) {
 			return <DeepDebugTranscript transcript={parsed.transcript} />;
 		}
-		
+
 		return <JsonRenderer data={parsed} />;
 	} catch {
 		return <div className="whitespace-pre-wrap break-words">{result}</div>;
@@ -186,17 +186,17 @@ export function ToolStatusIndicator({ event }: { event: ToolEvent }) {
 	const [isExpanded, setIsExpanded] = useState(false);
 	const hasResult = event.status === 'success' && event.result;
 	const isDeepDebug = event.name === 'deep_debug';
-	
-	const statusText = event.status === 'start' ? 'Running' : 
-	                   event.status === 'success' ? 'Completed' : 
-	                   'Error';
-	
-	const StatusIcon = event.status === 'start' ? LoaderCircle : 
-	                   event.status === 'success' ? Check : 
-	                   AlertTriangle;
-	
+
+	const statusText = event.status === 'start' ? 'Running' :
+		event.status === 'success' ? 'Completed' :
+			'Error';
+
+	const StatusIcon = event.status === 'start' ? LoaderCircle :
+		event.status === 'success' ? Check :
+			AlertTriangle;
+
 	const iconClass = event.status === 'start' ? 'size-3 animate-spin' : 'size-3';
-	
+
 	return (
 		<div className="flex flex-col gap-2">
 			<button
@@ -216,12 +216,12 @@ export function ToolStatusIndicator({ event }: { event: ToolEvent }) {
 					isExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />
 				)}
 			</button>
-			
+
 			{isExpanded && hasResult && event.result && (
 				<div className={clsx(
 					'p-3 rounded-md text-xs font-mono border overflow-auto',
-					isDeepDebug 
-						? 'bg-surface-tertiary/30 border-accent/20 max-h-[600px]' 
+					isDeepDebug
+						? 'bg-surface-tertiary/30 border-accent/20 max-h-[600px]'
 						: 'bg-surface-secondary border-border max-h-96'
 				)}>
 					<ToolResultRenderer result={event.result} toolName={event.name} />
@@ -238,25 +238,25 @@ function buildOrderedContent(message: string, inlineToolEvents: ToolEvent[]): Co
 
 	const items: ContentItem[] = [];
 	let lastPos = 0;
-	
+
 	for (const event of inlineToolEvents) {
 		const pos = event.contentLength ?? 0;
-		
+
 		// Add text before this event
 		if (pos > lastPos && message.slice(lastPos, pos)) {
 			items.push({ type: 'text', content: message.slice(lastPos, pos), key: `text-${lastPos}` });
 		}
-		
+
 		// Add event
 		items.push({ type: 'tool', event, key: `tool-${event.timestamp}` });
 		lastPos = pos;
 	}
-	
+
 	// Add remaining text
 	if (lastPos < message.length && message.slice(lastPos)) {
 		items.push({ type: 'text', content: message.slice(lastPos), key: `text-${lastPos}` });
 	}
-	
+
 	return items;
 }
 
@@ -270,52 +270,52 @@ export function AIMessage({
 	toolEvents?: ToolEvent[];
 }) {
 	const sanitizedMessage = sanitizeMessageForDisplay(message);
-	
+
 	// Check if this is a debug session (active or just completed in this session)
 	const debugEvent = toolEvents.find(ev => ev.name === 'deep_debug');
 	const isActiveDebug = debugEvent?.status === 'start';
 	const isCompletedDebug = debugEvent?.status === 'success' || debugEvent?.status === 'error';
-	
+
 	// Check if this is a live session with actual content
 	const hasInlineEvents = toolEvents.some(ev => ev.contentLength !== undefined);
 	const hasToolCalls = toolEvents.some(ev => ev.name !== 'deep_debug');
-	
+
 	// Only show bubble if: actively debugging OR (completed/errored with actual content/tool calls and inline events)
 	const isLiveDebugSession = debugEvent && (
-		isActiveDebug || 
+		isActiveDebug ||
 		(isCompletedDebug && hasInlineEvents && hasToolCalls)
 	);
-	
+
 	// Calculate elapsed time for active debug sessions
 	const [elapsedSeconds, setElapsedSeconds] = useState(0);
 	const startTimeRef = useRef<number | null>(null);
-	
+
 	useEffect(() => {
 		if (!isActiveDebug) {
 			startTimeRef.current = null;
 			setElapsedSeconds(0);
 			return;
 		}
-		
+
 		if (!startTimeRef.current) {
 			startTimeRef.current = Date.now();
 		}
-		
+
 		const interval = setInterval(() => {
 			if (startTimeRef.current) {
 				const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
 				setElapsedSeconds(elapsed);
 			}
 		}, 1000);
-		
+
 		return () => clearInterval(interval);
 	}, [isActiveDebug]);
-	
+
 	// Render debug bubble for live debug sessions (active or just completed)
 	// Don't show for old messages after page refresh (no inline events)
 	if (isLiveDebugSession) {
 		const toolCallCount = toolEvents.filter(e => e.name !== 'deep_debug').length;
-		
+
 		return (
 			<DebugSessionBubble
 				message={{
@@ -330,34 +330,34 @@ export function AIMessage({
 			/>
 		);
 	}
-	
+
 	// Separate: events without contentLength = top (restored), with contentLength = inline (streaming)
 	const topToolEvents = toolEvents.filter(ev => ev.contentLength === undefined);
 	const inlineToolEvents = toolEvents.filter(ev => ev.contentLength !== undefined)
 		.sort((a, b) => (a.contentLength ?? 0) - (b.contentLength ?? 0));
-	
+
 	const orderedContent = buildOrderedContent(sanitizedMessage, inlineToolEvents);
-	
+
 	// Don't render if completely empty
 	if (!sanitizedMessage && !topToolEvents.length && !orderedContent.length) {
 		return null;
 	}
-	
+
 	return (
 		<div className="flex gap-3">
 			<div className="align-text-top pl-1">
-				<AIAvatar className="size-6 text-orange-500" />
+				<span className="size-6 flex items-center justify-center text-base" role="img" aria-label="Delegate">🐙</span>
 			</div>
 			<div className="flex flex-col gap-2 min-w-0">
-				<div className="font-mono font-medium text-text-50">Orange</div>
-				
+				<div className="font-mono font-medium text-text-50">Delegate</div>
+
 				{/* Message content with inline tool events (from streaming) */}
 				{orderedContent.length > 0 && (
 					<div className={clsx(isThinking && 'animate-pulse')}>
 						<MessageContentRenderer content={sanitizedMessage} toolEvents={inlineToolEvents} />
 					</div>
 				)}
-				
+
 				{/* Completed tools (from restoration) - shown at end */}
 				{topToolEvents.length > 0 && (
 					<div className="flex flex-col gap-1.5 mt-1">

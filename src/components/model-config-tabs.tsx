@@ -35,7 +35,7 @@ export function ModelConfigTabs({
   defaultConfigs,
   loadingConfigs,
   onSaveConfig,
-  onTestConfig, 
+  onTestConfig,
   onResetConfig,
   onResetAllConfigs,
   testingConfig,
@@ -54,7 +54,7 @@ export function ModelConfigTabs({
 
   // Get agents for a specific tab using dynamic categorization
   const getAgentsForTab = useCallback((tabId: string) => {
-    return filteredAgentConfigs.filter(config => 
+    return filteredAgentConfigs.filter(config =>
       categorizeAgent(config.key) === tabId
     );
   }, [filteredAgentConfigs]);
@@ -79,10 +79,10 @@ export function ModelConfigTabs({
 
   // Handle bulk test all configured agents
   const handleTestAllConfigured = async () => {
-    const customizedConfigs = agentConfigs.filter(config => 
+    const customizedConfigs = agentConfigs.filter(config =>
       modelConfigs[config.key]?.isUserOverride
     );
-    
+
     if (customizedConfigs.length === 0) {
       toast.info('No customized configurations to test');
       return;
@@ -113,51 +113,40 @@ export function ModelConfigTabs({
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header with controls */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-        <div className="flex-1">
-          <h4 className="font-medium">Model Configuration Overrides</h4>
-          <p className="text-sm text-text-tertiary">
-            Customize AI model settings for different operations. Organized by workflow stage.
-          </p>
+    <div className="space-y-4">
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
+        <div className="relative flex-1 w-full sm:w-auto">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-text-tertiary" />
+          <Input
+            placeholder="Search agents..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9 w-full sm:w-56 h-8 text-sm dark:bg-bg-1 bg-bg-4"
+          />
         </div>
-        
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-text-tertiary" />
-            <Input
-              placeholder="Search configurations..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 w-full sm:w-64 dark:bg-bg-1 bg-bg-4"
-            />
-          </div>
-          
-          {/* Action buttons */}
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleTestAllConfigured}
-              className="gap-2"
-            >
-              <Play className="h-4 w-4" />
-              Test All
-            </Button>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onResetAllConfigs}
-              disabled={savingConfigs}
-              className="gap-2"
-            >
-              <RotateCcw className="h-4 w-4" />
-              {savingConfigs ? 'Resetting...' : 'Reset All'}
-            </Button>
-          </div>
+
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleTestAllConfigured}
+            className="gap-1.5 h-8 text-xs"
+          >
+            <Play className="h-3.5 w-3.5" />
+            Test All
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onResetAllConfigs}
+            disabled={savingConfigs}
+            className="gap-1.5 h-8 text-xs"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            {savingConfigs ? 'Resetting…' : 'Reset All'}
+          </Button>
         </div>
       </div>
 
@@ -167,10 +156,10 @@ export function ModelConfigTabs({
           {Object.values(WORKFLOW_TABS).map((tab) => {
             const Icon = tab.icon;
             const customizedCount = getCustomizedCountForTab(tab.id);
-            
+
             return (
-              <TabsTrigger 
-                key={tab.id} 
+              <TabsTrigger
+                key={tab.id}
                 value={tab.id}
                 className="flex flex-col gap-1 py-1 relative h-[calc(100%-4px)] min-h-[calc(100%-4px)] justify-center"
               >
@@ -190,7 +179,7 @@ export function ModelConfigTabs({
 
         {Object.values(WORKFLOW_TABS).map((tab) => {
           const agents = getAgentsForTab(tab.id);
-          
+
           return (
             <TabsContent key={tab.id} value={tab.id} className="mt-6">
               <div className="space-y-4">
@@ -210,7 +199,7 @@ export function ModelConfigTabs({
                     {searchTerm ? 'No configurations match your search.' : 'No configurations in this category.'}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 gap-8 auto-rows-fr">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     {agents.map((agent) => (
                       <ConfigCard
                         key={agent.key}

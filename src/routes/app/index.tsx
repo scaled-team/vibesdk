@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router';
 import type { AppDetailsData, FileType } from '@/api-types';
 import { apiClient, ApiError } from '@/lib/api-client';
@@ -18,23 +18,16 @@ import {
 	User,
 	Play,
 	Lock,
-	Unlock,
 	Bookmark,
 	Globe,
 	Trash2,
 	Github,
 	GitBranch,
 } from 'lucide-react';
-import { MonacoEditor } from '@/components/monaco-editor/monaco-editor';
+
+const MonacoEditor = lazy(() => import('@/components/monaco-editor/monaco-editor'));
 import { getFileType } from '@/utils/string';
 import { Button } from '@/components/ui/button';
-import {
-	Card,
-	CardContent,
-	CardDescription,
-	CardHeader,
-	CardTitle,
-} from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/auth-context';
@@ -209,9 +202,9 @@ export default function AppView() {
 						setApp((prev) =>
 							prev
 								? {
-										...prev,
-										starCount: response.data?.starCount || 0,
-									}
+									...prev,
+									starCount: response.data?.starCount || 0,
+								}
 								: null,
 						);
 						toast.success(
@@ -389,27 +382,27 @@ export default function AppView() {
 		try {
 			setIsDeploying(true);
 			setDeploymentProgress('Connecting to agent...');
-            const response = await apiClient.deployPreview(app.id);
-            if (response.success && response.data) {
-                const data = response.data;
-                if (data.previewURL || data.tunnelURL) {
-                    const newUrl = getPreviewUrl(
-                        data.previewURL,
-                        data.tunnelURL,
-                    );
-                    setApp((prev) =>
-                        prev
-                            ? {
-                                    ...prev,
-                                    cloudflareUrl: newUrl,
-                                    previewUrl: newUrl,
-                                }
-                            : null,
-                    );
-                    setDeploymentProgress('Deployment complete!');
-                }
-            }
-            setIsDeploying(false);
+			const response = await apiClient.deployPreview(app.id);
+			if (response.success && response.data) {
+				const data = response.data;
+				if (data.previewURL || data.tunnelURL) {
+					const newUrl = getPreviewUrl(
+						data.previewURL,
+						data.tunnelURL,
+					);
+					setApp((prev) =>
+						prev
+							? {
+								...prev,
+								cloudflareUrl: newUrl,
+								previewUrl: newUrl,
+							}
+							: null,
+					);
+					setDeploymentProgress('Deployment complete!');
+				}
+			}
+			setIsDeploying(false);
 		} catch (error) {
 			console.error('Error starting deployment:', error);
 			setDeploymentProgress('Failed to start deployment');
@@ -442,7 +435,7 @@ export default function AppView() {
 
 				toast.success(
 					response.data.message ||
-						`App is now ${newVisibility === 'private' ? 'private' : 'public'}`,
+					`App is now ${newVisibility === 'private' ? 'private' : 'public'}`,
 				);
 			} else {
 				throw new Error(
@@ -484,7 +477,7 @@ export default function AppView() {
 					// No history available, go to apps page
 					navigate('/apps');
 				}
-            }
+			}
 		} catch (error) {
 			console.error('Error deleting app:', error);
 			toast.error('An unexpected error occurred while deleting the app');
@@ -507,23 +500,21 @@ export default function AppView() {
 	if (error || !app) {
 		return (
 			<div className="min-h-screen bg-bg-3 flex items-center justify-center">
-				<Card className="max-w-md">
-					<CardContent className="pt-6">
-						<div className="text-center">
-							<h2 className="text-xl font-semibold mb-2">
-								App not found
-							</h2>
-							<p className="text-text-tertiary mb-4">
-								{error ||
-									"The app you're looking for doesn't exist."}
-							</p>
-							<Button onClick={() => navigate('/apps')}>
-								<ChevronLeft className="mr-2 h-4 w-4" />
-								Back to Apps
-							</Button>
-						</div>
-					</CardContent>
-				</Card>
+				<div className="max-w-md rounded-lg border border-border-primary bg-bg-2 p-6">
+					<div className="text-center">
+						<h2 className="text-xl font-semibold mb-2">
+							App not found
+						</h2>
+						<p className="text-text-tertiary mb-4">
+							{error ||
+								"The app you're looking for doesn't exist."}
+						</p>
+						<Button onClick={() => navigate('/apps')}>
+							<ChevronLeft className="mr-2 h-4 w-4" />
+							Back to Apps
+						</Button>
+					</div>
+				</div>
 			</div>
 		);
 	}
@@ -534,240 +525,148 @@ export default function AppView() {
 
 	return (
 		<div className="min-h-screen bg-bg-3 flex flex-col">
-			<div className="container mx-auto px-4 pb-6 space-y-6 flex flex-col flex-1">
+			<div className="container mx-auto px-4 pb-6 space-y-4 flex flex-col flex-1">
 				{/* Back button */}
 				<button
 					onClick={() => history.back()}
-					className="gap-2 flex items-center text-text-primary/80"
+					className="gap-1.5 flex items-center text-text-tertiary hover:text-text-primary text-sm transition-colors w-fit"
 				>
-					<ChevronLeft className="h-4 w-4" />
+					<ChevronLeft className="h-3.5 w-3.5" />
 					Back
 				</button>
 
-				{/* App Info Section */}
-				<div className="flex flex-col items-start justify-between gap-4 text-bg-4 w-fit rounded-lg p-5">
-					<div className="flex-1">
-						<div className="flex rounded w-fit pb-3 pt-2 flex-col mb-6">
-							<div className="flex items-center gap-3 mb-2">
-								<h1 className="text-4xl font-semibold tracking-tight text-text-primary">
-									{app.title}
-								</h1>
-
-								<div className="flex items-center gap-2 border rounded-xl">
-									<Badge variant={'default'}>
-										<Globe />
-										{capitalizeFirstLetter(app.visibility)}
-									</Badge>
-									{isOwner && (
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={handleToggleVisibility}
-											disabled={isUpdatingVisibility}
-											className="h-6 w-6 p-0 hover:bg-bg-3/50 -ml-1.5 !mr-1.5"
-											title={`Make ${app.visibility === 'private' ? 'public' : 'private'}`}
-										>
-											{isUpdatingVisibility ? (
-												<Loader2 className="h-3 w-3 animate-spin text-text-primary" />
-											) : app.visibility === 'private' ? (
-												<Unlock className="h-3 w-3 text-text-primary" />
-											) : (
-												<Lock className="h-3 w-3 text-text-primary" />
-											)}
-										</Button>
-									)}
-								</div>
-							</div>
-							<div className="flex flex-wrap gap-2">
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={handleFavorite}
-									className={cn(
-										'gap-2 text-text-primary',
-									)}
-								>
-									<Bookmark
-										className={cn(
-											'h-4 w-4',
-											isFavorited && 'fill-current',
-										)}
-									/>
-									{isFavorited ? 'Bookmarked' : 'Bookmark'}
-								</Button>
-
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={handleStar}
-									className={cn('gap-2 text-text-primary')}
-								>
-									<Star
-										className={cn(
-											'h-4 w-4',
-											isStarred && 'fill-current',
-										)}
-									/>
-									{isStarred ? 'Starred' : 'Star'}
-								</Button>
-
-								{/* Git Clone Button */}
-								<Button
-									variant="outline"
-									size="sm"
-									onClick={() => setIsGitCloneModalOpen(true)}
-									className="gap-2 text-text-primary"
-								>
-									<GitBranch className="h-4 w-4" />
-									Git Clone
-								</Button>
-
-								{/* GitHub Repository Button */}
-								{app.githubRepositoryUrl && (
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={() => {
-											if (app.githubRepositoryUrl) {
-												window.open(
-													app.githubRepositoryUrl,
-													'_blank',
-													'noopener,noreferrer',
-												);
-											}
-										}}
-										className={cn('gap-2 text-text-primary')}
-										title={`View on GitHub (${app.githubRepositoryVisibility || 'public'})`}
-									>
-										<Github className="h-4 w-4" />
-										View on GitHub
-										{app.githubRepositoryVisibility ===
-											'private' && (
-											<Lock className="h-3 w-3 opacity-70" />
-										)}
-									</Button>
+				{/* Header — compact layout */}
+				<div className="space-y-3">
+					{/* Title + visibility */}
+					<div className="flex items-center gap-3 flex-wrap">
+						<h1 className="text-2xl font-semibold tracking-tight text-text-primary">
+							{app.title}
+						</h1>
+						<Badge variant="outline" className="gap-1 text-xs font-normal">
+							{app.visibility === 'private' ? <Lock className="h-3 w-3" /> : <Globe className="h-3 w-3" />}
+							{capitalizeFirstLetter(app.visibility)}
+						</Badge>
+						{isOwner && (
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={handleToggleVisibility}
+								disabled={isUpdatingVisibility}
+								className="h-6 px-1.5"
+								title={`Make ${app.visibility === 'private' ? 'public' : 'private'}`}
+							>
+								{isUpdatingVisibility ? (
+									<Loader2 className="h-3 w-3 animate-spin" />
+								) : app.visibility === 'private' ? (
+									<span className="text-xs text-text-tertiary">Make public</span>
+								) : (
+									<span className="text-xs text-text-tertiary">Make private</span>
 								)}
+							</Button>
+						)}
+					</div>
 
-								{isOwner ? (
-									<>
-										<Button
-											size="sm"
-											onClick={() =>
-												navigate(`/chat/${app.id}`)
-											}
-											className="gap-2 bg-text-primary text-bg-4 border-bg-4 border"
-										>
-											<Code2 className="h-4 w-4" />
-											Continue Editing
-										</Button>
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={() =>
-												setIsDeleteDialogOpen(true)
-											}
-											className="gap-2 text-text-on-brand !border-0 bg-destructive hover:opacity-90 transition-colors"
-										>
-											<Trash2 className="h-4 w-4" />
-											Delete App
-										</Button>
-									</>
-								) 
-                                : (
-									<>
-										{/*
-										<Button
-											size="sm"
-											variant="secondary"
-											onClick={handleFork}
-											className="gap-2 bg-text-primary text-bg-1"
-										>
-											<Shuffle className="h-4 w-4" />
-											Remix
-										</Button>
-										*/}
-									</>
-								)
-                                }
-							</div>
-						</div>
+					{/* Description */}
+					{app.description && (
+						<p className="text-sm text-text-secondary max-w-3xl leading-relaxed">
+							{app.description}
+						</p>
+					)}
 
-						{app.description && (
-							<p className="text-text-primary my-3 max-w-4xl">
-								{app.description}
-							</p>
+					{/* Metadata row */}
+					<div className="flex flex-wrap items-center gap-3 text-xs text-text-tertiary">
+						{app.user && (
+							<span className="flex items-center gap-1">
+								<User className="h-3 w-3" />
+								{app.user.displayName}
+							</span>
+						)}
+						<span className="flex items-center gap-1">
+							<Calendar className="h-3 w-3" />
+							{isValid(createdDate)
+								? formatDistanceToNow(createdDate, { addSuffix: true })
+								: 'recently'}
+						</span>
+						<span className="flex items-center gap-1">
+							<Eye className="h-3 w-3" />
+							{app.viewCount || 0}
+						</span>
+						<span className="flex items-center gap-1">
+							<Star className="h-3 w-3" />
+							{app.starCount || 0}
+						</span>
+					</div>
+
+					{/* Action toolbar */}
+					<div className="flex flex-wrap items-center gap-2">
+						<Button variant="outline" size="sm" onClick={handleFavorite} className="gap-1.5 h-8 text-xs">
+							<Bookmark className={cn('h-3.5 w-3.5', isFavorited && 'fill-current')} />
+							{isFavorited ? 'Bookmarked' : 'Bookmark'}
+						</Button>
+
+						<Button variant="outline" size="sm" onClick={handleStar} className="gap-1.5 h-8 text-xs">
+							<Star className={cn('h-3.5 w-3.5', isStarred && 'fill-current')} />
+							{isStarred ? 'Starred' : 'Star'}
+						</Button>
+
+						<Button variant="outline" size="sm" onClick={() => setIsGitCloneModalOpen(true)} className="gap-1.5 h-8 text-xs">
+							<GitBranch className="h-3.5 w-3.5" />
+							Clone
+						</Button>
+
+						{app.githubRepositoryUrl && (
+							<Button variant="outline" size="sm"
+								onClick={() => app.githubRepositoryUrl && window.open(app.githubRepositoryUrl, '_blank', 'noopener,noreferrer')}
+								className="gap-1.5 h-8 text-xs"
+								title={`View on GitHub (${app.githubRepositoryVisibility || 'public'})`}
+							>
+								<Github className="h-3.5 w-3.5" />
+								GitHub
+								{app.githubRepositoryVisibility === 'private' && <Lock className="h-2.5 w-2.5 opacity-60" />}
+							</Button>
 						)}
 
-						<div className="flex flex-wrap items-center gap-4 text-sm text-text-secondary">
-							{app.user && (
-								<div className="flex items-center gap-2">
-									<User className="h-4 w-4" />
-									<span>{app.user.displayName}</span>
-								</div>
-							)}
-							<div className="flex items-center gap-2">
-								<Calendar className="h-4 w-4" />
-								<span>
-									{isValid(createdDate)
-										? formatDistanceToNow(createdDate, {
-												addSuffix: true,
-											})
-										: 'recently'}
-								</span>
-							</div>
-							<div className="flex items-center gap-2">
-								<Eye className="h-4 w-4" />
-								<span>{app.viewCount || 0}</span>
-							</div>
-							<div className="flex items-center gap-2">
-								<Star className="h-4 w-4" />
-								<span>{app.starCount || 0}</span>
-							</div>
-						</div>
+						{isOwner && (
+							<>
+								<Button size="sm" onClick={() => navigate(`/chat/${app.id}`)}
+									className="gap-1.5 h-8 text-xs bg-text-primary text-bg-4 border-bg-4 border"
+								>
+									<Code2 className="h-3.5 w-3.5" />
+									Continue Editing
+								</Button>
+								<Button variant="ghost" size="sm"
+									onClick={() => setIsDeleteDialogOpen(true)}
+									className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+									title="Delete app"
+								>
+									<Trash2 className="h-3.5 w-3.5" />
+								</Button>
+							</>
+						)}
 					</div>
 				</div>
-				<Tabs
-					value={activeTab}
-					onValueChange={setActiveTab}
-					className="flex flex-col flex-1 gap-2"
-				>
-					{/* Tab switcher and Git Clone inline */}
+
+				{/* Tabs */}
+				<Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 gap-2">
 					<div className="flex items-center gap-4">
-						{/* Using proper TabsList and TabsTrigger components */}
 						<TabsList className="inline-flex h-auto w-fit items-center gap-0.5 bg-bg-2 dark:bg-bg-1 rounded-md p-0.5 border border-border-primary/30">
-						<TabsTrigger 
-							value="preview" 
-							className="px-3 py-1.5 rounded text-xs font-medium data-[state=active]:bg-bg-4 dark:data-[state=active]:bg-bg-3 data-[state=active]:text-text-primary data-[state=active]:shadow-sm"
-						>
-							<Eye className={cn(
-								"h-3.5 w-3.5 mr-1.5",
-								activeTab === 'preview' ? 'text-accent' : 'text-accent/60'
-							)} />
-							Preview
-						</TabsTrigger>
-						<TabsTrigger 
-							value="code" 
-							className="px-3 py-1.5 rounded text-xs font-medium data-[state=active]:bg-bg-4 dark:data-[state=active]:bg-bg-3 data-[state=active]:text-text-primary data-[state=active]:shadow-sm"
-						>
-							<Code2 className={cn(
-								"h-3.5 w-3.5 mr-1.5",
-								activeTab === 'code' ? 'text-accent' : 'text-accent/60'
-							)} />
-							Code
-						</TabsTrigger>
-						<TabsTrigger 
-							value="prompt" 
-							className="px-3 py-1.5 rounded text-xs font-medium data-[state=active]:bg-bg-4 dark:data-[state=active]:bg-bg-3 data-[state=active]:text-text-primary data-[state=active]:shadow-sm"
-						>
-							<MessageSquare className={cn(
-								"h-3.5 w-3.5 mr-1.5",
-								activeTab === 'prompt' ? 'text-accent' : 'text-accent/60'
-							)} />
-							Prompt
-						</TabsTrigger>
+							<TabsTrigger value="preview"
+								className="px-3 py-1.5 rounded text-xs font-medium data-[state=active]:bg-bg-4 dark:data-[state=active]:bg-bg-3 data-[state=active]:text-text-primary data-[state=active]:shadow-sm">
+								<Eye className={cn("h-3.5 w-3.5 mr-1.5", activeTab === 'preview' ? 'text-accent' : 'text-accent/60')} />
+								Preview
+							</TabsTrigger>
+							<TabsTrigger value="code"
+								className="px-3 py-1.5 rounded text-xs font-medium data-[state=active]:bg-bg-4 dark:data-[state=active]:bg-bg-3 data-[state=active]:text-text-primary data-[state=active]:shadow-sm">
+								<Code2 className={cn("h-3.5 w-3.5 mr-1.5", activeTab === 'code' ? 'text-accent' : 'text-accent/60')} />
+								Code
+							</TabsTrigger>
+							<TabsTrigger value="prompt"
+								className="px-3 py-1.5 rounded text-xs font-medium data-[state=active]:bg-bg-4 dark:data-[state=active]:bg-bg-3 data-[state=active]:text-text-primary data-[state=active]:shadow-sm">
+								<MessageSquare className={cn("h-3.5 w-3.5 mr-1.5", activeTab === 'prompt' ? 'text-accent' : 'text-accent/60')} />
+								Prompt
+							</TabsTrigger>
 						</TabsList>
-						
-						{/* Git Clone - Inline with tabs */}
+
 						<div className="flex-shrink-0">
 							{app.visibility === 'public' ? (
 								<GitCloneCommand
@@ -775,322 +674,154 @@ export default function AppView() {
 									appTitle={app.title}
 								/>
 							) : isOwner ? (
-								<GitClonePrivatePrompt
-									onOpenModal={() => setIsGitCloneModalOpen(true)}
-								/>
+								<GitClonePrivatePrompt onOpenModal={() => setIsGitCloneModalOpen(true)} />
 							) : null}
 						</div>
 					</div>
 
+					{/* Preview tab */}
 					<TabsContent value="preview" className="flex-1">
-						<Card className="px-2">
-							<CardHeader className="overflow-hidden rounded-t">
-								<div className="flex items-center gap-4 min-w-0">
-									<CardTitle className="text-base flex-shrink-0">
-										Live Preview
-									</CardTitle>
-									{/* Preview URL action buttons */}
-									{appUrl && (
-										<div className="ml-auto flex items-center gap-0 flex-shrink-0">
-											<Button
-												variant="ghost"
-												size="sm"
-												onClick={handleCopyUrl}
-												className="gap-2"
-															>
-																{urlCopied ? (
-																	<>
-																		<Check className="h-3 w-3" />
-																		Copied!
-																	</>
-																) : (
-																	<>
-																		<Copy className="h-3 w-3" />
-																	</>
-																)}
-															</Button>
-											<Button
-												variant="ghost"
-												size="sm"
-												onClick={() =>
-													window.open(
-														appUrl,
-														'_blank',
-													)
-												}
-												className="gap-2"
-											>
+						<div className="rounded-lg border border-border-primary overflow-hidden bg-bg-2">
+							{appUrl ? (
+								<>
+									<div className="flex items-center gap-2 px-3 py-2 border-b border-border-primary/50 bg-bg-3/50">
+										<span className="text-xs font-medium text-text-tertiary">Live Preview</span>
+										<div className="ml-auto flex items-center gap-1">
+											<Button variant="ghost" size="sm" onClick={handleCopyUrl} className="h-7 px-2 text-xs gap-1.5">
+												{urlCopied ? <><Check className="h-3 w-3" /> Copied</> : <Copy className="h-3 w-3" />}
+											</Button>
+											<Button variant="ghost" size="sm" onClick={() => window.open(appUrl, '_blank')} className="h-7 w-7 p-0">
 												<ExternalLink className="h-3 w-3" />
 											</Button>
 										</div>
-									)}
-								</div>
-							</CardHeader>
-							<CardContent className="p-0">
-								<div className="border-t relative">
-									{appUrl ? (
-										<PreviewIframe
-											ref={previewIframeRef}
-											src={appUrl}
-											className="w-full h-[600px] lg:h-[800px]"
-											title={`${app.title} Preview`}
-										/>
-									) : (
-										<div className="relative w-full h-[400px] bg-gray-50 flex items-center justify-center">
-											{/* Frosted glass overlay */}
-											<div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-10">
-												<div className="text-center p-8">
-													<h3 className="text-xl font-semibold mb-2 text-gray-700">
-														Run App
-													</h3>
-													<p className="text-gray-500 mb-6 max-w-md">
-														Run the app to see a
-														live preview.
-													</p>
-													{deploymentProgress && (
-														<p className="text-sm text-gray-800 mb-4">
-															{deploymentProgress}
-														</p>
-													)}
-													<div className="flex gap-3 justify-center">
-														<Button
-															onClick={
-																handlePreviewDeploy
-															}
-															disabled={
-																isDeploying
-															}
-															className="gap-2"
-														>
-															{isDeploying ? (
-																<>
-																	<Loader2 className="h-4 w-4 animate-spin" />
-																	Deploying...
-																</>
-															) : (
-																<>
-																	<Play className="h-4 w-4" />
-																	Deploy for
-																	Preview
-																</>
-															)}
-														</Button>
-													</div>
-												</div>
-											</div>
-											{/* Background pattern */}
-											<div className="absolute inset-0 opacity-10">
-												<div
-													className="w-full h-full"
-													style={{
-														backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23000' fill-opacity='0.1'%3E%3Cpath d='M20 20c0 11.046-8.954 20-20 20V0c11.046 0 20 8.954 20 20z'/%3E%3C/g%3E%3C/svg%3E")`,
-														backgroundSize:
-															'40px 40px',
-													}}
-												/>
-											</div>
-										</div>
-									)}
-								</div>
-							</CardContent>
-						</Card>
-					</TabsContent>
-
-					<TabsContent value="code" className="flex-1">
-						<Card className="flex flex-col" style={{ maxHeight: '600px' }}>
-							<CardHeader>
-								<div className="flex items-center justify-between">
-									<div>
-										<CardTitle>Generated Code</CardTitle>
-										{app?.agentSummary && (
-											<p className="text-sm text-muted-foreground">
-												{files.length} files generated
-											</p>
-										)}
 									</div>
-									{activeFile && (
-										<Button
-											variant="ghost"
-																			size="sm"
-																			onClick={() => {
-																			void copyFile(activeFile.fileContents);
-																		}}
-																			className="gap-2"
-										>
-											<Copy className="h-3 w-3" />
-											Copy File
-										</Button>
-									)}
-								</div>
-							</CardHeader>
-							<CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
-								{files.length > 0 ? (
-									<div className="h-[450px] relative bg-bg-3 overflow-hidden">
-										<div className="h-full flex">
-											<div className="w-full max-w-[250px] bg-bg-3 border-r border-text/10 h-full overflow-y-auto">
-												<div className="p-2 px-3 text-sm flex items-center gap-1 text-text-primary/50 font-medium border-b bg-bg-3">
-													<Code2 className="size-4" />
-													Files
-												</div>
-												<div className="flex flex-col">
-													{files.map((file) => (
-														<button
-															key={file.filePath}
-															onClick={() =>
-																handleFileClick(
-																	file,
-																)
-															}
-															className={cn(
-																'flex items-center w-full gap-2 py-2 px-3 text-left text-sm transition-colors',
-																activeFile?.filePath ===
-																	file.filePath
-																	? 'bg-blue-100 text-blue-900 border-r-2 border-blue-500'
-																	: 'hover:bg-bg-3 text-text-tertiary hover:text-text-primary',
-															)}
-														>
-															<Code2 className="h-4 w-4 flex-shrink-0" />
-															<span className="truncate font-mono text-xs">
-																{file.filePath}
-															</span>
-														</button>
-													))}
-												</div>
-											</div>
-
-											<div className="flex-1 flex flex-col">
-												{activeFile ? (
-													<>
-														<div className="flex items-center justify-between p-3 border-b bg-bg-3">
-															<div className="flex items-center gap-2 flex-1">
-																<Code2 className="h-4 w-4" />
-																<span className="text-sm font-mono">
-																	{
-																		activeFile.filePath
-																	}
-																</span>
-																{activeFile.explanation && (
-																	<span className="text-xs text-text-tertiary ml-3">
-																		{
-																			activeFile.explanation
-																		}
-																	</span>
-																)}
-															</div>
-														</div>
-
-														<div className="flex-1 min-h-0">
-															<MonacoEditor
-																className="h-full"
-																createOptions={{
-																	value: activeFile.fileContents,
-																	language:
-																		activeFile.language ||
-																		'plaintext',
-																	readOnly: true,
-																	minimap: {
-																		enabled: false,
-																	},
-																	lineNumbers:
-																		'on',
-																	scrollBeyondLastLine: false,
-																	fontSize: 13,
-																	theme: 'vibesdk',
-																	automaticLayout: true,
-																}}
-															/>
-														</div>
-													</>
-												) : (
-													<div className="flex-1 flex items-center justify-center">
-														<p className="text-text-tertiary">
-															Select a file to
-															view
-														</p>
-													</div>
-												)}
-											</div>
-										</div>
-									</div>
-								) : (
-									<div className="flex items-center justify-center h-[400px]">
-										<p className="text-muted-foreground">
-											{app?.agentSummary === null 
-												? 'Loading code...' 
-												: 'No code has been generated yet.'
-											}
-										</p>
-									</div>
-								)}
-							</CardContent>
-						</Card>
-					</TabsContent>
-
-					<TabsContent
-						value="prompt"
-						className="flex-1"
-					>
-						<Card>
-							<CardHeader>
-								<CardTitle>Original Prompt</CardTitle>
-								<CardDescription>
-									The initial prompt used to create this app
-								</CardDescription>
-							</CardHeader>
-							<CardContent>
-								{app?.agentSummary?.query || app?.originalPrompt ? (
-									<div className="bg-bg-2 rounded-lg p-6 border border-border-primary">
-										<div className="flex items-start gap-3">
-											<div className="flex-shrink-0 mt-1">
-												<div className="rounded-full bg-accent/10 p-2">
-													<MessageSquare className="h-4 w-4 text-accent" />
-												</div>
-											</div>
-											<div className="flex-1">
-												<p className="text-sm text-text-secondary mb-2 font-medium">Prompt</p>
-												<p className="text-text-primary whitespace-pre-wrap">
-													{app?.agentSummary?.query || app?.originalPrompt}
-												</p>
-											</div>
-										</div>
-										
-										{/* Copy button */}
-										<div className="mt-4 flex justify-end">
-											<Button
-												variant="outline"
-												size="sm"
-												onClick={() => {
-													const prompt = app?.agentSummary?.query || app?.originalPrompt;
-																		if (prompt) {
-																			void copyPrompt(prompt);
-																		}
-
-												}}
-												className="gap-2"
-											>
-												<Copy className="h-3 w-3" />
-												Copy Prompt
+									<PreviewIframe ref={previewIframeRef} src={appUrl}
+										className="w-full h-[600px] lg:h-[800px]" title={`${app.title} Preview`} />
+								</>
+							) : (
+								<div className="relative w-full h-[350px] bg-bg-2 flex items-center justify-center">
+									<div className="absolute inset-0 bg-bg-3/80 backdrop-blur-sm flex items-center justify-center z-10">
+										<div className="text-center p-8">
+											<h3 className="text-lg font-semibold mb-1.5 text-text-primary">Run App</h3>
+											<p className="text-sm text-text-tertiary mb-5 max-w-sm">Run the app to see a live preview.</p>
+											{deploymentProgress && (
+												<p className="text-xs text-text-secondary mb-3">{deploymentProgress}</p>
+											)}
+											<Button onClick={handlePreviewDeploy} disabled={isDeploying} className="gap-2" size="sm">
+												{isDeploying
+													? <><Loader2 className="h-4 w-4 animate-spin" /> Deploying...</>
+													: <><Play className="h-4 w-4" /> Deploy for Preview</>}
 											</Button>
 										</div>
 									</div>
-								) : (
-									<div className="flex items-center justify-center py-12 text-text-tertiary">
-										<MessageSquare className="h-8 w-8 mr-3" />
-										<p>
-											{app?.agentSummary === null 
-												? 'Loading prompt...' 
-												: 'No prompt available'
-											}
-										</p>
-									</div>
+								</div>
+							)}
+						</div>
+					</TabsContent>
+
+					{/* Code tab */}
+					<TabsContent value="code" className="flex-1">
+						<div className="rounded-lg border border-border-primary overflow-hidden bg-bg-3" style={{ maxHeight: '600px' }}>
+							<div className="flex items-center justify-between px-3 py-2 border-b border-border-primary/50 bg-bg-3/50">
+								<span className="text-xs font-medium text-text-tertiary">
+									Generated Code {app?.agentSummary && `· ${files.length} files`}
+								</span>
+								{activeFile && (
+									<Button variant="ghost" size="sm" onClick={() => void copyFile(activeFile.fileContents)}
+										className="h-7 px-2 text-xs gap-1.5">
+										<Copy className="h-3 w-3" /> Copy
+									</Button>
 								)}
-							</CardContent>
-						</Card>
+							</div>
+							{files.length > 0 ? (
+								<div className="h-[450px] flex">
+									<div className="w-full max-w-[200px] bg-bg-3/50 border-r border-border-primary/30 overflow-y-auto">
+										{files.map((file) => (
+											<button key={file.filePath} onClick={() => handleFileClick(file)}
+												className={cn(
+													'flex items-center w-full gap-2 py-1.5 px-3 text-left text-xs transition-colors',
+													activeFile?.filePath === file.filePath
+														? 'bg-accent/10 text-accent border-r-2 border-accent'
+														: 'text-text-tertiary hover:text-text-primary hover:bg-bg-3',
+												)}>
+												<Code2 className="h-3 w-3 flex-shrink-0" />
+												<span className="truncate font-mono">{file.filePath}</span>
+											</button>
+										))}
+									</div>
+									<div className="flex-1 flex flex-col min-w-0">
+										{activeFile ? (
+											<>
+												<div className="flex items-center gap-2 px-3 py-1.5 border-b border-border-primary/30 bg-bg-3/30">
+													<span className="text-xs font-mono text-text-secondary">{activeFile.filePath}</span>
+													{activeFile.explanation && (
+														<span className="text-xs text-text-tertiary ml-2 truncate">{activeFile.explanation}</span>
+													)}
+												</div>
+												<div className="flex-1 min-h-0">
+													<Suspense fallback={<div className="h-full w-full bg-bg-3" />}>
+														<MonacoEditor className="h-full"
+															createOptions={{
+																value: activeFile.fileContents,
+																language: activeFile.language || 'plaintext',
+																readOnly: true,
+																minimap: { enabled: false },
+																lineNumbers: 'on',
+																scrollBeyondLastLine: false,
+																fontSize: 13,
+																theme: 'vibesdk',
+																automaticLayout: true,
+															}} />
+													</Suspense>
+												</div>
+											</>
+										) : (
+											<div className="flex-1 flex items-center justify-center">
+												<p className="text-xs text-text-tertiary">Select a file to view</p>
+											</div>
+										)}
+									</div>
+								</div>
+							) : (
+								<div className="flex items-center justify-center h-[300px]">
+									<p className="text-xs text-text-tertiary">
+										{app?.agentSummary === null ? 'Loading code...' : 'No code has been generated yet.'}
+									</p>
+								</div>
+							)}
+						</div>
+					</TabsContent>
+
+					{/* Prompt tab */}
+					<TabsContent value="prompt" className="flex-1">
+						<div className="rounded-lg border border-border-primary bg-bg-2 p-5">
+							{app?.agentSummary?.query || app?.originalPrompt ? (
+								<div className="space-y-3">
+									<p className="text-xs font-medium text-text-tertiary uppercase tracking-wider">Original Prompt</p>
+									<p className="text-sm text-text-primary whitespace-pre-wrap leading-relaxed">
+										{app?.agentSummary?.query || app?.originalPrompt}
+									</p>
+									<div className="flex justify-end pt-1">
+										<Button variant="outline" size="sm" className="h-7 text-xs gap-1.5"
+											onClick={() => {
+												const prompt = app?.agentSummary?.query || app?.originalPrompt;
+												if (prompt) void copyPrompt(prompt);
+											}}>
+											<Copy className="h-3 w-3" /> Copy Prompt
+										</Button>
+									</div>
+								</div>
+							) : (
+								<div className="flex items-center justify-center py-10 text-text-tertiary gap-2">
+									<MessageSquare className="h-4 w-4" />
+									<p className="text-sm">{app?.agentSummary === null ? 'Loading prompt...' : 'No prompt available'}</p>
+								</div>
+							)}
+						</div>
 					</TabsContent>
 				</Tabs>
 			</div>
 
-			{/* Delete Confirmation Dialog */}
 			<ConfirmDeleteDialog
 				open={isDeleteDialogOpen}
 				onOpenChange={setIsDeleteDialogOpen}
@@ -1099,7 +830,6 @@ export default function AppView() {
 				appTitle={app?.title}
 			/>
 
-			{/* Git Clone Modal */}
 			<GitCloneModal
 				open={isGitCloneModalOpen}
 				onOpenChange={setIsGitCloneModalOpen}

@@ -1,5 +1,5 @@
 import type { RefObject } from 'react';
-import { BaseHeaderActions } from '@/components/shared/BaseHeaderActions';
+import { BaseHeaderActions, type DeployProps, type ViewportMode } from '@/components/shared/BaseHeaderActions';
 import type { ModelConfigsInfo } from '@/api-types';
 
 interface EditorHeaderActionsProps {
@@ -10,6 +10,10 @@ interface EditorHeaderActionsProps {
 	isGitHubExportReady: boolean;
 	onGitHubExportClick: () => void;
 	editorRef: RefObject<HTMLDivElement | null>;
+	deploy?: DeployProps;
+	onEnvVarsClick?: () => void;
+	viewport?: ViewportMode;
+	onViewportChange?: (viewport: ViewportMode) => void;
 }
 
 export function EditorHeaderActions({
@@ -20,6 +24,10 @@ export function EditorHeaderActions({
 	isGitHubExportReady,
 	onGitHubExportClick,
 	editorRef,
+	deploy,
+	onEnvVarsClick,
+	viewport,
+	onViewportChange,
 }: EditorHeaderActionsProps) {
 	return (
 		<BaseHeaderActions
@@ -30,6 +38,10 @@ export function EditorHeaderActions({
 			onGitCloneClick={onGitCloneClick}
 			isGitHubExportReady={isGitHubExportReady}
 			onGitHubExportClick={onGitHubExportClick}
+			deploy={deploy}
+			onEnvVarsClick={onEnvVarsClick}
+			viewport={viewport}
+			onViewportChange={onViewportChange}
 		/>
 	);
 }

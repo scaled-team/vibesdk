@@ -10,7 +10,6 @@ import {
 	Users2,
 	Bookmark,
 	// LayoutGrid,
-	Compass,
 } from 'lucide-react';
 import './sidebar-overrides.css';
 import { useRecentApps, useFavoriteApps, useApps } from '@/hooks/use-apps';
@@ -31,7 +30,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/auth-context';
-import { useNavigate } from 'react-router';
+import { useNavigate, useLocation } from 'react-router';
 import { cn } from '@/lib/utils';
 import {
 	Tooltip,
@@ -68,6 +67,7 @@ interface AppMenuItemProps {
 	variant?: 'recent' | 'bookmarked';
 	showActions?: boolean;
 	isCollapsed: boolean;
+	isActive?: boolean;
 	getVisibilityIcon: (visibility: App['visibility']) => React.ReactNode;
 }
 
@@ -77,6 +77,7 @@ function AppMenuItem({
 	variant = 'recent',
 	showActions = true,
 	isCollapsed,
+	isActive = false,
 	getVisibilityIcon,
 }: AppMenuItemProps) {
 	const formatTimestamp = () => {
@@ -88,14 +89,18 @@ function AppMenuItem({
 	};
 
 	return (
-		<SidebarMenuItem className="group/app-item">
+		<SidebarMenuItem className={cn("group/app-item relative", isActive && "before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-[3px] before:h-4 before:bg-accent before:rounded-r-full")}>
 			<SidebarMenuButton
 				asChild
+				isActive={isActive}
 				tooltip={app.title}
-				className="cursor-pointer transition-opacity hover:opacity-75 pr-0"
+				className={cn(
+					"cursor-pointer transition-opacity hover:opacity-75 pr-0",
+					isActive && "!opacity-100 hover:!opacity-100 !bg-bg-3"
+				)}
 			>
 				<a
-					href={`/app/${app.id}`}
+					href={`/chat/${app.id}`}
 					onClick={(e) => {
 						e.preventDefault();
 						onClick(app.id);
@@ -109,7 +114,10 @@ function AppMenuItem({
 							)}
 
 							<div className="relative flex-1 min-w-0 overflow-hidden">
-								<span className="font-medium flex justify-start  items-center  gap-2 text-text-primary/80 whitespace-nowrap">
+								<span className={cn(
+									"font-medium flex justify-start items-center gap-2 whitespace-nowrap",
+									isActive ? "text-text-primary" : "text-text-primary/80"
+								)}>
 									<span className="text-ellipsis w-fit overflow-hidden">
 										{app.title}{' '}
 									</span>
@@ -118,10 +126,16 @@ function AppMenuItem({
 									</div>
 								</span>
 
-								<div className="absolute inset-y-0 right-0 w-4 bg-gradient-to-l from-bg-2 to-transparent pointer-events-none" />
+								<div className={cn(
+									"absolute inset-y-0 right-0 w-4 bg-gradient-to-l to-transparent pointer-events-none",
+									isActive ? "from-bg-3" : "from-bg-2"
+								)} />
 							</div>
 						</div>
-						<p className="text-xs text-text-tertiary truncate">
+						<p className={cn(
+							"text-xs truncate",
+							isActive ? "text-text-secondary" : "text-text-tertiary"
+						)}>
 							{formatTimestamp()}
 						</p>
 					</div>
@@ -149,7 +163,14 @@ function AppMenuItem({
 export function AppSidebar() {
 	const { user } = useAuth();
 	const navigate = useNavigate();
+	const { pathname } = useLocation();
 	const [searchQuery, setSearchQuery] = React.useState('');
+
+	// Extract active chat/app ID from URL for highlighting
+	const activeChatId = React.useMemo(() => {
+		const match = pathname.match(/^\/chat\/(.+)$/);
+		return match ? match[1] : null;
+	}, [pathname]);
 	const [expandedGroups, setExpandedGroups] = React.useState<string[]>([
 		'apps',
 		'boards',
@@ -313,7 +334,7 @@ export function AppSidebar() {
 																			id,
 																		) =>
 																			navigate(
-																				`/app/${id}`,
+																				`/chat/${id}`,
 																			)
 																		}
 																		variant="recent"
@@ -322,6 +343,9 @@ export function AppSidebar() {
 																		}
 																		isCollapsed={
 																			isCollapsed
+																		}
+																		isActive={
+																			app.id === activeChatId
 																		}
 																		getVisibilityIcon={
 																			getVisibilityIcon
@@ -354,13 +378,15 @@ export function AppSidebar() {
 															app={app}
 															onClick={(id) =>
 																navigate(
-																	`/app/${id}`,
+																	`/chat/${id}`,
 																)
 															}
 															variant="recent"
 															showActions={true}
 															isCollapsed={
 																isCollapsed
+															}
+															isActive={app.id === activeChatId
 															}
 															getVisibilityIcon={
 																getVisibilityIcon
@@ -419,12 +445,14 @@ export function AppSidebar() {
 														app={app}
 														onClick={(id) =>
 															navigate(
-																`/app/${id}`,
+																`/chat/${id}`,
 															)
 														}
 														showActions={true}
 														isCollapsed={
 															isCollapsed
+														}
+														isActive={app.id === activeChatId
 														}
 														getVisibilityIcon={
 															getVisibilityIcon
@@ -570,21 +598,6 @@ export function AppSidebar() {
 				<SidebarFooter>
 					{user && (
 						<SidebarMenu>
-							<SidebarMenuItem>
-								<SidebarMenuButton
-									id="discover-link"
-									onClick={() => navigate('/discover')}
-									tooltip="Discover"
-									className="group hover:opacity-80 hover:cursor-pointer hover:bg-bg-1/50 transition-all duration-200"
-								>
-									<Compass className="h-6 w-6 text-text-primary/60 group-hover:text-primary/80 transition-colors" />
-									{!isCollapsed && (
-										<span className="text-text-primary/80 font-medium group-hover:text-primary transition-colors">
-											Discover
-										</span>
-									)}
-								</SidebarMenuButton>
-							</SidebarMenuItem>
 							<SidebarMenuItem>
 								<SidebarMenuButton
 									onClick={() => navigate('/settings')}

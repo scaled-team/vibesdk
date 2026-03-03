@@ -14,7 +14,7 @@ import { AGENT_CONFIG } from "../inferutils/config";
 // import { analyzeTypeScriptFile } from "../../services/code-fixer/analyzer";
 
 // Constants for magic numbers
-const DEFAULT_PASSES = 5;
+const DEFAULT_PASSES = 2;
 const MAX_RETRIES = 3;
 const FUZZY_THRESHOLD = 0.87;
 

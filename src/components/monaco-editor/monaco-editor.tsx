@@ -339,3 +339,5 @@ export const MonacoEditor = memo<MonacoEditorProps>(function MonacoEditor({
 
 	return <div {...props} ref={containerRef}></div>;
 });
+
+export default MonacoEditor;

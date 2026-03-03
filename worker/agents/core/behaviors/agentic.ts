@@ -57,7 +57,7 @@ export class AgenticCodingBehavior extends BaseCodingBehavior<AgenticState> impl
     ): Promise<AgenticState> {
         await super.initialize(initArgs);
 
-        const { query, hostname, inferenceContext, templateInfo, sandboxSessionId } = initArgs;
+        const { query, context, hostname, inferenceContext, templateInfo, sandboxSessionId } = initArgs;
 
         const packageJson = templateInfo?.templateDetails?.allFiles['package.json'];
 
@@ -74,6 +74,7 @@ export class AgenticCodingBehavior extends BaseCodingBehavior<AgenticState> impl
             ...this.state,
             projectName,
             query,
+            delegateContext: context,
             blueprint: {
                 title: baseName,
                 projectName,
@@ -90,7 +91,8 @@ export class AgenticCodingBehavior extends BaseCodingBehavior<AgenticState> impl
             hostname,
             metadata: inferenceContext.metadata,
             projectType: this.projectType,
-            behaviorType: 'agentic'
+            behaviorType: 'agentic',
+            completedMilestones: []
         });
         
         if (templateInfo && templateInfo.templateDetails.name !== 'scratch') {
@@ -349,14 +351,18 @@ export class AgenticCodingBehavior extends BaseCodingBehavior<AgenticState> impl
                 await this.handleMessageCompletion(conversationMessage);
             };
 
-            // Prepare inputs for operation
+            // Prepare inputs for operation — prepend workspace context to query if available
+            const effectiveQuery = this.state.delegateContext
+                ? `\nWORKSPACE CONTEXT:\n${this.state.delegateContext}\n\n${this.state.query}`
+                : this.state.query;
             const builderInputs: AgenticProjectBuilderInputs = {
-                query: this.state.query,
+                query: effectiveQuery,
                 projectName: this.state.projectName,
                 blueprint: this.state.blueprint,
                 filesIndex: Object.values(this.state.generatedFilesMap),
                 projectType: this.state.projectType || 'app',
-                operationalMode: this.isMVPGenerated() ? 'followup' : 'initial',
+                operationalMode: (this.isMVPGenerated() || (this.state.completedMilestones?.length > 0)) ? 'followup' : 'initial',
+                completedMilestones: this.state.completedMilestones || [],
                 conversationHistory,
                 streamCb: (chunk: string) => {
                     this.broadcast(WebSocketMessageResponses.CONVERSATION_RESPONSE, {
@@ -388,6 +394,12 @@ export class AgenticCodingBehavior extends BaseCodingBehavior<AgenticState> impl
         } finally {
             this.generationPromise = null;
             this.clearAbortController();
+
+            // Broadcast generation complete so the frontend can update stages
+            this.broadcast(WebSocketMessageResponses.GENERATION_COMPLETE, {
+                message: "Code generation completed.",
+                instanceId: this.state.sandboxInstanceId,
+            });
         }
     }
 }

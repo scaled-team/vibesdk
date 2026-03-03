@@ -78,6 +78,7 @@ export class PhasicCodingBehavior extends BaseCodingBehavior<PhasicState> implem
             env: this.env,
             inferenceContext,
             query,
+            context: initArgs.context,
             language: language!,
             frameworks: frameworks!,
             templateDetails: templateInfo?.templateDetails,

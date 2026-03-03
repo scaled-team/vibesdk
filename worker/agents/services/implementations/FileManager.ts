@@ -18,32 +18,21 @@ export class FileManager implements IFileManager {
         private getTemplateDetailsFunc: () => TemplateDetails,
         private git: GitVersionControl
     ) {
-        // Register callback with git to auto-sync after operations
-        this.git.setOnFilesChangedCallback(() => {
-            this.syncGeneratedFilesMapFromGit();
-        });
+        // State is kept in sync via recordFileChanges() — no callback-driven git sync needed
     }
 
     /**
-     * Sync generatedFilesMap from git HEAD
-     * TODO: Remove in the future by making git fs the single source of truth
+     * Sync generatedFilesMap from git HEAD.
+     * Only called on-demand (e.g., agent resume) — not on every commit.
      */
     async syncGeneratedFilesMapFromGit(): Promise<void> {
-        console.log('[FileManager] Auto-syncing generatedFilesMap from git HEAD');
-        
         try {
-            // Get all files from HEAD commit
             const gitFiles = await this.git.getAllFilesFromHead();
-            
-            // Get old map to preserve purposes
             const oldMap = this.stateManager.getState().generatedFilesMap;
-            
-            // Build new map, preserving existing purposes
             const newMap: Record<string, FileState> = {};
-            
+
             for (const file of gitFiles) {
                 const existing = oldMap[file.filePath];
-                
                 newMap[file.filePath] = {
                     filePath: file.filePath,
                     fileContents: file.fileContents,
@@ -51,20 +40,13 @@ export class FileManager implements IFileManager {
                     lastDiff: ''
                 };
             }
-            
-            // Update state
+
             this.stateManager.setState({
                 ...this.stateManager.getState(),
                 generatedFilesMap: newMap
             });
-            
-            console.log('[FileManager] Sync complete', {
-                filesCount: Object.keys(newMap).length,
-                preservedPurposes: Object.values(newMap).filter(f => oldMap[f.filePath]?.filePurpose).length
-            });
         } catch (error) {
             console.error('[FileManager] Failed to sync from git:', error);
-            // Don't throw - keep existing state as fallback
         }
     }
 

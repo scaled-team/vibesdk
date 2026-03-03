@@ -61,8 +61,17 @@ export interface BaseProjectState {
     pendingUserInputs: string[];
     projectUpdatesAccumulator: string[];
     
+    // Delegate workspace context (markdown-formatted)
+    delegateContext?: string;
+
     // Deep debug
     lastDeepDebugTranscript: string | null;
+
+    // User-defined environment variables for the generated project
+    envVars?: Record<string, string>;
+
+    // Pre-fetched dependency documentation from npm registry
+    fetchedDepDocs?: string;
 
     mvpGenerated: boolean;
     reviewingInitiated: boolean;
@@ -114,6 +123,7 @@ export interface AgenticState extends BaseProjectState {
     behaviorType: 'agentic';
     blueprint: AgenticBlueprint;
     currentPlan: Plan;
+    completedMilestones: string[];
 }
 
 export type AgentState = PhasicState | AgenticState;

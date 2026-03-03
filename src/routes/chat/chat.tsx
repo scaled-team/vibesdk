@@ -13,9 +13,8 @@ import clsx from 'clsx';
 import { UserMessage, AIMessage } from './components/messages';
 import { PhaseTimeline } from './components/phase-timeline';
 import { type DebugMessage } from './components/debug-panel';
-import { DeploymentControls } from './components/deployment-controls';
 import { useChat } from './hooks/use-chat';
-import { type ModelConfigsInfo, type BlueprintType, type PhasicBlueprint, SUPPORTED_IMAGE_MIME_TYPES, type ProjectType, type FileType } from '@/api-types';
+import { type ModelConfigsInfo, type BlueprintType, type PhasicBlueprint, type AgenticBlueprint, SUPPORTED_IMAGE_MIME_TYPES, type ProjectType, type FileType } from '@/api-types';
 import { featureRegistry } from '@/features';
 import { useFileContentStream } from './hooks/use-file-content-stream';
 import { logger } from '@/utils/logger';
@@ -35,9 +34,13 @@ import { MainContentPanel } from './components/main-content-panel';
 import { ChatInput } from './components/chat-input';
 import { useVault } from '@/hooks/use-vault';
 import { VaultUnlockModal } from '@/components/vault';
+import { EnvVarsModal } from '@/components/env-vars-modal';
 
 const isPhasicBlueprint = (blueprint?: BlueprintType | null): blueprint is PhasicBlueprint =>
 	!!blueprint && 'implementationRoadmap' in blueprint;
+
+const isAgenticBlueprint = (blueprint?: BlueprintType | null): blueprint is AgenticBlueprint =>
+	!!blueprint && 'plan' in blueprint && !('implementationRoadmap' in blueprint);
 
 export default function Chat() {
 	const { chatId: urlChatId } = useParams();
@@ -106,6 +109,19 @@ export default function Chat() {
 		[requestUnlock],
 	);
 
+	// Env vars state (defined before useChat so callbacks can be passed in)
+	const [envVars, setEnvVars] = useState<Record<string, string>>({});
+	const [isEnvVarsModalOpen, setIsEnvVarsModalOpen] = useState(false);
+	const [isEnvVarsSaving, setIsEnvVarsSaving] = useState(false);
+
+	const handleEnvVarsUpdated = useCallback((_keys: string[]) => {
+		setIsEnvVarsSaving(false);
+	}, []);
+
+	const handleEnvVarsState = useCallback((vars: Record<string, string>) => {
+		setEnvVars(vars);
+	}, []);
+
 	const {
 		messages,
 		edit,
@@ -127,12 +143,7 @@ export default function Chat() {
 		// Deployment and generation control
 		isDeploying,
 		cloudflareDeploymentUrl,
-		deploymentError,
-		isRedeployReady,
-		isGenerationPaused,
 		isGenerating,
-		handleStopGeneration,
-		handleResumeGeneration,
 		handleDeployToCloudflare,
 		// Preview refresh control
 		shouldRefreshPreview,
@@ -154,11 +165,24 @@ export default function Chat() {
 		projectType: urlProjectType as ProjectType,
 		onDebugMessage: addDebugMessage,
 		onVaultUnlockRequired: handleVaultUnlockRequired,
+		onEnvVarsUpdated: handleEnvVarsUpdated,
+		onEnvVarsState: handleEnvVarsState,
 	});
 
 	// GitHub export functionality - use urlChatId directly from URL params
 	const githubExport = useGitHubExport(websocket, urlChatId, refetchApp);
 	const { user } = useAuth();
+
+	// Env vars actions (need websocket from useChat)
+	const saveEnvVars = useCallback((vars: Record<string, string>) => {
+		setIsEnvVarsSaving(true);
+		sendWebSocketMessage(websocket, 'set_env_vars', { envVars: vars });
+	}, [websocket]);
+
+	const openEnvVarsModal = useCallback(() => {
+		sendWebSocketMessage(websocket, 'get_env_vars');
+		setIsEnvVarsModalOpen(true);
+	}, [websocket]);
 
 	const navigate = useNavigate();
 
@@ -172,7 +196,6 @@ export default function Chat() {
 
 	// Debug panel state
 	const [debugMessages, setDebugMessages] = useState<DebugMessage[]>([]);
-	const deploymentControlsRef = useRef<HTMLDivElement>(null);
 
 	const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
 	const [isGitCloneModalOpen, setIsGitCloneModalOpen] = useState(false);
@@ -422,9 +445,9 @@ export default function Chat() {
 		return detectContentType(files);
 	}, [files]);
 
-    const hasDocumentation = useMemo(() => {
-        return Object.values(contentDetection.Contents).some(bundle => bundle.type === 'markdown');
-    }, [contentDetection]);
+	const hasDocumentation = useMemo(() => {
+		return Object.values(contentDetection.Contents).some(bundle => bundle.type === 'markdown');
+	}, [contentDetection]);
 
 	// Preview available based on projectType and content
 	const previewAvailable = useMemo(() => {
@@ -553,7 +576,7 @@ export default function Chat() {
 			setView('editor');
 		}
 	}, [isGeneratingBlueprint, view]);
-    
+
 	const isRunning = useMemo(() => {
 		return (
 			isBootstrapping || isGeneratingBlueprint // || codeGenState === 'active'
@@ -613,7 +636,9 @@ export default function Chat() {
 		// Get predicted phase count from blueprint, fallback to current phase count
 		const predictedPhaseCount = isPhasicBlueprint(blueprint)
 			? blueprint.implementationRoadmap.length
-			: 0;
+			: isAgenticBlueprint(blueprint)
+				? blueprint.plan.length
+				: 0;
 		const totalPhases = Math.max(predictedPhaseCount, phaseTimeline.length, 1);
 
 		return [completedPhases, totalPhases];
@@ -652,13 +677,13 @@ export default function Chat() {
 					layout="position"
 					className="flex-1 shrink-0 flex flex-col basis-0 max-w-lg relative z-10 h-full min-h-0"
 				>
-					<div 
-					className={clsx(
-						'flex-1 overflow-y-auto min-h-0 chat-messages-scroll',
-						isDebugging && 'animate-debug-pulse'
-					)} 
-					ref={messagesContainerRef}
-				>
+					<div
+						className={clsx(
+							'flex-1 overflow-y-auto min-h-0 chat-messages-scroll',
+							isDebugging && 'animate-debug-pulse'
+						)}
+						ref={messagesContainerRef}
+					>
 						<div className="pt-5 px-4 pb-4 text-sm flex flex-col gap-5">
 							{appLoading ? (
 								<div className="flex items-center gap-2 text-text-tertiary">
@@ -668,10 +693,10 @@ export default function Chat() {
 							) : (
 								<>
 									{(appTitle || chatId) && (
-								<div className="flex items-center justify-between mb-2">
-									<div className="text-lg font-semibold">{appTitle}</div>
-								</div>
-							)}
+										<div className="flex items-center justify-between mb-2">
+											<div className="text-lg font-semibold">{appTitle}</div>
+										</div>
+									)}
 									<UserMessage
 										message={query ?? displayQuery}
 									/>
@@ -679,41 +704,41 @@ export default function Chat() {
 							)}
 
 							{mainMessage && (
-							<div className="relative">
-								<AIMessage
-									message={mainMessage.content}
-									isThinking={mainMessage.ui?.isThinking}
-									toolEvents={mainMessage.ui?.toolEvents}
-								/>
-								{chatId && (
-									<div className="absolute right-1 top-1">
-										<DropdownMenu>
-											<DropdownMenuTrigger asChild>
-												<Button
-													variant="ghost"
-													size="icon"
-													className="hover:bg-bg-3/80 cursor-pointer"
-												>
-													<MoreHorizontal className="h-4 w-4" />
-													<span className="sr-only">Chat actions</span>
-												</Button>
-											</DropdownMenuTrigger>
-											<DropdownMenuContent align="end" className="w-56">
-												<DropdownMenuItem
+								<div className="relative">
+									<AIMessage
+										message={mainMessage.content}
+										isThinking={mainMessage.ui?.isThinking}
+										toolEvents={mainMessage.ui?.toolEvents}
+									/>
+									{chatId && (
+										<div className="absolute right-1 top-1">
+											<DropdownMenu>
+												<DropdownMenuTrigger asChild>
+													<Button
+														variant="ghost"
+														size="icon"
+														className="hover:bg-bg-3/80 cursor-pointer"
+													>
+														<MoreHorizontal className="h-4 w-4" />
+														<span className="sr-only">Chat actions</span>
+													</Button>
+												</DropdownMenuTrigger>
+												<DropdownMenuContent align="end" className="w-56">
+													<DropdownMenuItem
 														onClick={(e) => {
 															e.preventDefault();
 															setIsResetDialogOpen(true);
 														}}
-												>
-													<RotateCcw className="h-4 w-4 mr-2" />
-													Reset conversation
-												</DropdownMenuItem>
-											</DropdownMenuContent>
-										</DropdownMenu>
-									</div>
-								)}
-							</div>
-						)}
+													>
+														<RotateCcw className="h-4 w-4 mr-2" />
+														Reset conversation
+													</DropdownMenuItem>
+												</DropdownMenuContent>
+											</DropdownMenu>
+										</div>
+									)}
+								</div>
+							)}
 
 							{otherMessages
 								.filter(message => message.role === 'assistant' && message.ui?.isThinking)
@@ -741,6 +766,7 @@ export default function Chat() {
 								<PhaseTimeline
 									projectStages={projectStages}
 									phaseTimeline={phaseTimeline}
+									planMilestones={isAgenticBlueprint(blueprint) ? blueprint.plan : undefined}
 									files={files}
 									view={view}
 									activeFile={activeFile}
@@ -765,43 +791,7 @@ export default function Chat() {
 								/>
 							)}
 
-							{/* Deployment and Generation Controls - Only for phasic mode */}
-							{chatId && behaviorType !== 'agentic' && (
-								<motion.div
-									ref={deploymentControlsRef}
-									initial={{ opacity: 0, y: 20 }}
-									animate={{ opacity: 1, y: 0 }}
-									transition={{ duration: 0.3, delay: 0.2 }}
-									className="px-4 mb-6"
-								>
-									<DeploymentControls
-										isPhase1Complete={isPhase1Complete}
-										isDeploying={isDeploying}
-										deploymentUrl={cloudflareDeploymentUrl}
-										instanceId={chatId || ''}
-										isRedeployReady={isRedeployReady}
-										deploymentError={deploymentError}
-										appId={app?.id || chatId}
-										appVisibility={app?.visibility}
-										isGenerating={
-											isGenerating ||
-											isGeneratingBlueprint
-										}
-										isPaused={isGenerationPaused}
-										onDeploy={handleDeployToCloudflare}
-										onStopGeneration={handleStopGeneration}
-										onResumeGeneration={
-											handleResumeGeneration
-										}
-										onVisibilityUpdate={(newVisibility) => {
-											// Update app state if needed
-											if (app) {
-												app.visibility = newVisibility;
-											}
-										}}
-									/>
-								</motion.div>
-							)}
+
 
 							{otherMessages
 								.filter(message => !message.ui?.isThinking)
@@ -828,25 +818,25 @@ export default function Chat() {
 					</div>
 
 
-				<ChatInput
-					newMessage={newMessage}
-					onMessageChange={setNewMessage}
-					onSubmit={onNewMessage}
-					images={images}
-					onAddImages={addImages}
-					onRemoveImage={removeImage}
-					isProcessing={isProcessing}
-					isChatDragging={isChatDragging}
-					chatDragHandlers={chatDragHandlers}
-					isChatDisabled={isChatDisabled}
-					isRunning={isRunning}
-					isGenerating={isGenerating}
-					isGeneratingBlueprint={isGeneratingBlueprint}
-					isDebugging={isDebugging}
-					websocket={websocket}
-					chatFormRef={chatFormRef}
-					imageInputRef={imageInputRef}
-				/>
+					<ChatInput
+						newMessage={newMessage}
+						onMessageChange={setNewMessage}
+						onSubmit={onNewMessage}
+						images={images}
+						onAddImages={addImages}
+						onRemoveImage={removeImage}
+						isProcessing={isProcessing}
+						isChatDragging={isChatDragging}
+						chatDragHandlers={chatDragHandlers}
+						isChatDisabled={isChatDisabled}
+						isRunning={isRunning}
+						isGenerating={isGenerating}
+						isGeneratingBlueprint={isGeneratingBlueprint}
+						isDebugging={isDebugging}
+						websocket={websocket}
+						chatFormRef={chatFormRef}
+						imageInputRef={imageInputRef}
+					/>
 				</motion.div>
 
 				<AnimatePresence mode="wait">
@@ -888,6 +878,15 @@ export default function Chat() {
 								previewRef={previewRef}
 								editorRef={editorRef}
 								templateDetails={templateDetails}
+								deploy={chatId ? {
+									isDeployReady: behaviorType === 'agentic'
+										? files.length > 0
+										: isPhase1Complete,
+									isDeploying,
+									deploymentUrl: cloudflareDeploymentUrl,
+									onDeploy: () => handleDeployToCloudflare(chatId),
+								} : undefined}
+								onEnvVarsClick={openEnvVarsModal}
 							/>
 						</motion.div>
 					)}
@@ -915,6 +914,14 @@ export default function Chat() {
 					if (!open) clearUnlockRequest();
 				}}
 				reason={vaultState.unlockReason ?? undefined}
+			/>
+
+			<EnvVarsModal
+				open={isEnvVarsModalOpen}
+				onOpenChange={setIsEnvVarsModalOpen}
+				envVars={envVars}
+				onSave={saveEnvVars}
+				isSaving={isEnvVarsSaving}
 			/>
 		</div>
 	);

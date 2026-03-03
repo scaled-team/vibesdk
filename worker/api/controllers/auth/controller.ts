@@ -7,9 +7,9 @@ import { SessionService } from '../../../database/services/SessionService';
 import { UserService } from '../../../database/services/UserService';
 import { ApiKeyService } from '../../../database/services/ApiKeyService';
 import { generateApiKey, sha256Hash } from '../../../utils/cryptoUtils';
-import { 
-    loginSchema, 
-    registerSchema, 
+import {
+    loginSchema,
+    registerSchema,
     oauthProviderSchema
 } from './authSchemas';
 import { SecurityError } from 'shared/types/errors';
@@ -17,8 +17,8 @@ import {
     formatAuthResponse,
     mapUserResponse,
     setSecureAuthCookies,
-	clearAuthCookies,
-	extractSessionId
+    clearAuthCookies,
+    extractSessionId
 } from '../../../utils/authUtils';
 import { JWTUtils } from '../../../utils/jwtUtils';
 import { RouteContext } from '../../types/route-context';
@@ -35,10 +35,10 @@ export class AuthController extends BaseController {
      * Check if OAuth providers are configured
      */
     static hasOAuthProviders(env: Env): boolean {
-        return (!!env.GOOGLE_CLIENT_ID && !!env.GOOGLE_CLIENT_SECRET) || 
-               (!!env.GITHUB_CLIENT_ID && !!env.GITHUB_CLIENT_SECRET);
+        return (!!env.GOOGLE_CLIENT_ID && !!env.GOOGLE_CLIENT_SECRET) ||
+            (!!env.GITHUB_CLIENT_ID && !!env.GITHUB_CLIENT_SECRET);
     }
-    
+
     /**
      * Register a new user
      * POST /api/auth/register
@@ -66,34 +66,34 @@ export class AuthController extends BaseController {
                     403
                 );
             }
-            
+
             const authService = new AuthService(env);
             const result = await authService.register(validatedData, request);
-            
+
             const response = AuthController.createSuccessResponse(
                 formatAuthResponse(result.user, result.sessionId, result.expiresAt)
             );
-            
+
             setSecureAuthCookies(response, {
                 accessToken: result.accessToken,
                 accessTokenExpiry: SessionService.config.sessionTTL
             });
-            
+
             // Rotate CSRF token on successful registration if configured
             if (CsrfService.defaults.rotateOnAuth) {
                 CsrfService.rotateToken(response);
             }
-            
+
             return response;
         } catch (error) {
             if (error instanceof SecurityError) {
                 return AuthController.createErrorResponse(error.message, error.statusCode);
             }
-            
+
             return AuthController.handleError(error, 'register user');
         }
     }
-    
+
     /**
      * Login with email and password
      * POST /api/auth/login
@@ -121,34 +121,34 @@ export class AuthController extends BaseController {
                     403
                 );
             }
-            
+
             const authService = new AuthService(env);
             const result = await authService.login(validatedData, request);
-            
+
             const response = AuthController.createSuccessResponse(
                 formatAuthResponse(result.user, result.sessionId, result.expiresAt)
             );
-            
+
             setSecureAuthCookies(response, {
                 accessToken: result.accessToken,
                 accessTokenExpiry: SessionService.config.sessionTTL
             });
-            
+
             // Rotate CSRF token on successful login if configured
             if (CsrfService.defaults.rotateOnAuth) {
                 CsrfService.rotateToken(response);
             }
-            
+
             return response;
         } catch (error) {
             if (error instanceof SecurityError) {
                 return AuthController.createErrorResponse(error.message, error.statusCode);
             }
-            
+
             return AuthController.handleError(error, 'login user');
         }
     }
-    
+
     /**
      * Logout current user
      * POST /api/auth/logout
@@ -156,46 +156,46 @@ export class AuthController extends BaseController {
     static async logout(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
         try {
             const sessionId = extractSessionId(request);
-			if (sessionId) {
-				try {
-					const sessionService = new SessionService(env);
-					await sessionService.revokeSessionId(sessionId);
-				} catch (error) {
-					this.logger.debug(
-						'Failed to properly logout session',
-						error,
-					);
-				}
-			}
-                        
-            const response = AuthController.createSuccessResponse({ 
-                success: true, 
-                message: 'Logged out successfully' 
+            if (sessionId) {
+                try {
+                    const sessionService = new SessionService(env);
+                    await sessionService.revokeSessionId(sessionId);
+                } catch (error) {
+                    this.logger.debug(
+                        'Failed to properly logout session',
+                        error,
+                    );
+                }
+            }
+
+            const response = AuthController.createSuccessResponse({
+                success: true,
+                message: 'Logged out successfully'
             });
-            
+
             clearAuthCookies(response);
-            
+
             // Clear CSRF token on logout
             CsrfService.clearTokenCookie(response);
-            
+
             return response;
         } catch (error) {
             this.logger.error('Logout failed', error);
-            
-            const response = AuthController.createSuccessResponse({ 
-                success: true, 
-                message: 'Logged out' 
+
+            const response = AuthController.createSuccessResponse({
+                success: true,
+                message: 'Logged out'
             });
-            
+
             clearAuthCookies(response);
-            
+
             // Clear CSRF token on logout
             CsrfService.clearTokenCookie(response);
-            
+
             return response;
         }
     }
-    
+
     /**
      * Get current user profile
      * GET /api/auth/profile
@@ -213,7 +213,7 @@ export class AuthController extends BaseController {
             return AuthController.handleError(error, 'get profile');
         }
     }
-    
+
     /**
      * Update user profile
      * PUT /api/auth/profile
@@ -224,7 +224,7 @@ export class AuthController extends BaseController {
             if (!user) {
                 return AuthController.createErrorResponse('Unauthorized', 401);
             }
-            
+
             const bodyResult = await AuthController.parseJsonBody<{
                 displayName?: string;
                 username?: string;
@@ -232,21 +232,21 @@ export class AuthController extends BaseController {
                 theme?: 'light' | 'dark' | 'system';
                 timezone?: string;
             }>(request);
-            
+
             if (!bodyResult.success) {
                 return bodyResult.response!;
             }
-            
+
             const updateData = bodyResult.data!;
             const userService = new UserService(env);
-            
+
             if (updateData.username) {
                 const isAvailable = await userService.isUsernameAvailable(updateData.username, user.id);
                 if (!isAvailable) {
                     return AuthController.createErrorResponse('Username already taken', 400);
                 }
             }
-            
+
             await userService.updateUserProfile(user.id, {
                 displayName: updateData.displayName,
                 username: updateData.username,
@@ -254,13 +254,13 @@ export class AuthController extends BaseController {
                 avatarUrl: undefined,
                 timezone: updateData.timezone
             });
-            
+
             const updatedUser = await userService.findUser({ id: user.id });
-            
+
             if (!updatedUser) {
                 return AuthController.createErrorResponse('User not found', 404);
             }
-            
+
             return AuthController.createSuccessResponse({
                 user: mapUserResponse(updatedUser),
                 message: 'Profile updated successfully'
@@ -269,7 +269,7 @@ export class AuthController extends BaseController {
             return AuthController.handleError(error, 'update profile');
         }
     }
-    
+
     /**
      * Initiate OAuth flow
      * GET /api/auth/oauth/:provider
@@ -277,29 +277,29 @@ export class AuthController extends BaseController {
     static async initiateOAuth(request: Request, env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
         try {
             const validatedProvider = oauthProviderSchema.parse(routeContext.pathParams.provider);
-            
+
             // Get intended redirect URL from query parameter
             const intendedRedirectUrl = routeContext.queryParams.get('redirect_url') || undefined;
-            
+
             const authService = new AuthService(env);
             const authUrl = await authService.getOAuthAuthorizationUrl(
                 validatedProvider,
                 request,
                 intendedRedirectUrl
             );
-            
+
             return Response.redirect(authUrl, 302);
         } catch (error) {
             this.logger.error('OAuth initiation failed', error);
-            
+
             if (error instanceof SecurityError) {
                 return AuthController.createErrorResponse(error.message, error.statusCode);
             }
-            
+
             return AuthController.handleError(error, 'initiate OAuth');
         }
     }
-    
+
     /**
      * Handle OAuth callback
      * GET /api/auth/callback/:provider
@@ -307,22 +307,22 @@ export class AuthController extends BaseController {
     static async handleOAuthCallback(request: Request, env: Env, _ctx: ExecutionContext, routeContext: RouteContext): Promise<Response> {
         try {
             const validatedProvider = oauthProviderSchema.parse(routeContext.pathParams.provider);
-            
+
             const code = routeContext.queryParams.get('code');
             const state = routeContext.queryParams.get('state');
             const error = routeContext.queryParams.get('error');
-            
+
             if (error) {
                 this.logger.error('OAuth provider returned error', { provider: validatedProvider, error });
                 const baseUrl = new URL(request.url).origin;
                 return Response.redirect(`${baseUrl}/?error=oauth_failed`, 302);
             }
-            
+
             if (!code || !state) {
                 const baseUrl = new URL(request.url).origin;
                 return Response.redirect(`${baseUrl}/?error=missing_params`, 302);
             }
-            
+
             const authService = new AuthService(env);
             const result = await authService.handleOAuthCallback(
                 validatedProvider,
@@ -330,12 +330,12 @@ export class AuthController extends BaseController {
                 state,
                 request
             );
-            
+
             const baseUrl = new URL(request.url).origin;
-            
+
             // Use stored redirect URL or default to home page
             const redirectLocation = result.redirectUrl || `${baseUrl}/`;
-            
+
             // Create redirect response with secure auth cookies
             const response = new Response(null, {
                 status: 302,
@@ -343,11 +343,11 @@ export class AuthController extends BaseController {
                     'Location': redirectLocation
                 }
             });
-            
+
             setSecureAuthCookies(response, {
                 accessToken: result.accessToken,
             });
-            
+
             return response;
         } catch (error) {
             this.logger.error('OAuth callback failed', error);
@@ -364,14 +364,14 @@ export class AuthController extends BaseController {
         try {
             // Use the same middleware authentication logic but don't require auth
             const userSession = await authMiddleware(request, env);
-            
+
             if (!userSession) {
                 return AuthController.createSuccessResponse({
                     authenticated: false,
                     user: null
                 });
             }
-            
+
             return AuthController.createSuccessResponse({
                 authenticated: true,
                 user: {
@@ -426,7 +426,7 @@ export class AuthController extends BaseController {
             const sessionIdToRevoke = routeContext.pathParams.sessionId;
 
             const sessionService = new SessionService(env);
-            
+
             await sessionService.revokeUserSession(sessionIdToRevoke, user.id);
 
             return AuthController.createSuccessResponse({
@@ -535,8 +535,8 @@ export class AuthController extends BaseController {
                 return AuthController.createErrorResponse('Unauthorized', 401);
             }
 
-            const keyId = routeContext.pathParams.keyId;            
-            
+            const keyId = routeContext.pathParams.keyId;
+
             const apiKeyService = new ApiKeyService(env);
             await apiKeyService.revokeApiKey(keyId, user.id);
 
@@ -654,22 +654,22 @@ export class AuthController extends BaseController {
 
             const authService = new AuthService(env);
             const result = await authService.verifyEmailWithOtp(email, otp, request);
-            
+
             const response = AuthController.createSuccessResponse(
                 formatAuthResponse(result.user, result.sessionId, result.expiresAt)
             );
-            
+
             setSecureAuthCookies(response, {
                 accessToken: result.accessToken,
                 accessTokenExpiry: SessionService.config.sessionTTL
             });
-            
+
             return response;
         } catch (error) {
             if (error instanceof SecurityError) {
                 return AuthController.createErrorResponse(error.message, error.statusCode);
             }
-            
+
             return AuthController.handleError(error, 'verify email');
         }
     }
@@ -693,7 +693,7 @@ export class AuthController extends BaseController {
 
             const authService = new AuthService(env);
             await authService.resendVerificationOtp(email);
-            
+
             return AuthController.createSuccessResponse({
                 message: 'Verification code sent successfully'
             });
@@ -701,7 +701,7 @@ export class AuthController extends BaseController {
             if (error instanceof SecurityError) {
                 return AuthController.createErrorResponse(error.message, error.statusCode);
             }
-            
+
             return AuthController.handleError(error, 'resend verification OTP');
         }
     }
@@ -713,23 +713,23 @@ export class AuthController extends BaseController {
     static async getCsrfToken(request: Request, _env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
         try {
             const token = CsrfService.getOrGenerateToken(request, false);
-            
-            const response = AuthController.createSuccessResponse({ 
+
+            const response = AuthController.createSuccessResponse({
                 token,
                 headerName: CsrfService.defaults.headerName,
                 expiresIn: Math.floor(CsrfService.defaults.tokenTTL / 1000)
             });
-            
+
             // Set the token in cookie with proper expiration
             const maxAge = Math.floor(CsrfService.defaults.tokenTTL / 1000);
             CsrfService.setTokenCookie(response, token, maxAge);
-            
+
             return response;
         } catch (error) {
             return AuthController.handleError(error, 'get CSRF token');
         }
     }
-    
+
     /**
      * Get available authentication providers
      * GET /api/auth/providers
@@ -746,10 +746,10 @@ export class AuthController extends BaseController {
                 github: !!env.GITHUB_CLIENT_ID && !!env.GITHUB_CLIENT_SECRET,
                 email: true
             };
-            
+
             // Include CSRF token with provider info
             const csrfToken = CsrfService.getOrGenerateToken(request, false);
-            
+
             const response = AuthController.createSuccessResponse({
                 providers,
                 hasOAuth: providers.google || providers.github,
@@ -757,15 +757,112 @@ export class AuthController extends BaseController {
                 csrfToken,
                 csrfExpiresIn: Math.floor(CsrfService.defaults.tokenTTL / 1000)
             });
-            
+
             // Set CSRF token cookie with proper expiration
             const maxAge = Math.floor(CsrfService.defaults.tokenTTL / 1000);
             CsrfService.setTokenCookie(response, csrfToken, maxAge);
-            
+
             return response;
         } catch (error) {
             this.logger.error('Get auth providers error', error);
             return AuthController.createErrorResponse('Failed to get authentication providers', 500);
+        }
+    }
+    /**
+     * SSO Login from Delegate
+     * GET /api/auth/sso-login?token=...
+     * 
+     * Accepts a JWT signed with WEBHOOK_SECRET containing the Delegate user's email and name.
+     * Auto-creates the user if they don't exist, creates a session, sets auth cookies,
+     * and redirects to the app root.
+     */
+    static async ssoLogin(request: Request, env: Env, _ctx: ExecutionContext, _routeContext: RouteContext): Promise<Response> {
+        try {
+            const url = new URL(request.url);
+            const ssoToken = url.searchParams.get('token');
+
+            if (!ssoToken) {
+                return AuthController.createErrorResponse('Missing SSO token', 400);
+            }
+
+            // Verify the SSO token using WEBHOOK_SECRET (shared between Delegate and VibeSdk)
+            const secret = env.WEBHOOK_SECRET;
+            if (!secret) {
+                this.logger.error('WEBHOOK_SECRET not configured for SSO');
+                return AuthController.createErrorResponse('SSO not configured', 500);
+            }
+
+            // Verify JWT using jose
+            const { jwtVerify } = await import('jose');
+            const secretKey = new TextEncoder().encode(secret);
+
+            let payload: Record<string, unknown>;
+            try {
+                const result = await jwtVerify(ssoToken, secretKey, { algorithms: ['HS256'] });
+                payload = result.payload as Record<string, unknown>;
+            } catch (err) {
+                this.logger.warn('SSO token verification failed', { error: err });
+                return AuthController.createErrorResponse('Invalid SSO token', 401);
+            }
+
+            const email = (payload.email as string)?.toLowerCase();
+            const name = payload.name as string | undefined;
+
+            if (!email) {
+                return AuthController.createErrorResponse('Invalid SSO token: missing email', 400);
+            }
+
+            // Find or create user
+            const userService = new UserService(env);
+            let user = await userService.findUser({ email });
+
+            if (!user) {
+                // Auto-create user from SSO
+                user = await userService.createUser({
+                    email: email,
+                    displayName: name || email.split('@')[0],
+                    emailVerified: true, // Trusted from Delegate SSO
+                    provider: 'sso',
+                    providerId: `delegate-sso-${email}`, // Required NOT NULL field
+                    isActive: true,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                } as any);
+
+                this.logger.info('SSO: Auto-created user', { userId: user.id, email });
+            }
+
+            if (!user) {
+                return AuthController.createErrorResponse('Failed to create SSO user', 500);
+            }
+
+            // Create session and JWT
+            const sessionService = new SessionService(env);
+            const { accessToken } = await sessionService.createSession(user.id, request);
+
+            // Redirect to app root with auth cookies and context params
+            const baseUrl = url.origin;
+            const redirectUrl = new URL(baseUrl);
+            if (payload.workspaceId) redirectUrl.searchParams.set('workspaceId', payload.workspaceId as string);
+            if (payload.projectId) redirectUrl.searchParams.set('projectId', payload.projectId as string);
+
+            const response = new Response(null, {
+                status: 302,
+                headers: { 'Location': redirectUrl.toString() },
+            });
+
+            // Set auth cookie with SameSite=None for cross-origin iframe support
+            const cookieValue = `accessToken=${encodeURIComponent(accessToken)}; Max-Age=${SessionService.config.sessionTTL}; Path=/; Secure; SameSite=None; HttpOnly`;
+            response.headers.append('Set-Cookie', cookieValue);
+
+            this.logger.info('SSO: User authenticated', { userId: user.id, email });
+            return response;
+        } catch (error) {
+            this.logger.error('SSO login failed', {
+                message: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined
+            });
+            return AuthController.handleError(error, 'SSO login');
         }
     }
 }

@@ -312,8 +312,6 @@ You're empowered to design presentations that match the user's vision. Consider:
 - Runtime tested via preview
 - Edge cases considered
 
-${PROMPT_UTILS.REACT_RENDER_LOOP_PREVENTION}
-
 ${PROMPT_UTILS.COMMON_PITFALLS}
 </quality_standards>`;
 

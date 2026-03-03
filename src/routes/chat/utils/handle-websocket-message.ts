@@ -1,5 +1,5 @@
 import type { WebSocket } from 'partysocket';
-import type { WebSocketMessage, BlueprintType, ConversationMessage, AgentState, PhasicState, BehaviorType, ProjectType, TemplateDetails } from '@/api-types';
+import type { WebSocketMessage, BlueprintType, ConversationMessage, AgentState, AgenticState, PhasicState, BehaviorType, ProjectType, TemplateDetails } from '@/api-types';
 import { deduplicateMessages, isAssistantMessageDuplicate } from './deduplicate-messages';
 import { logger } from '@/utils/logger';
 import { getFileType } from '@/utils/string';
@@ -26,13 +26,18 @@ import { toast } from 'sonner';
 import { createRepairingJSONParser } from '@/utils/ndjson-parser/ndjson-parser';
 
 const isPhasicState = (state: AgentState): state is PhasicState => {
-	const record = state as unknown as Record<string, unknown>;
-	const behaviorType = record.behaviorType;
-	if (behaviorType === 'phasic') return true;
-	if (behaviorType === undefined || behaviorType === null) {
-		return Array.isArray(record.generatedPhases);
-	}
-	return false;
+    const record = state as unknown as Record<string, unknown>;
+    const behaviorType = record.behaviorType;
+    if (behaviorType === 'phasic') return true;
+    if (behaviorType === undefined || behaviorType === null) {
+        return Array.isArray(record.generatedPhases);
+    }
+    return false;
+};
+
+const isAgenticState = (state: AgentState): state is AgenticState => {
+    const record = state as unknown as Record<string, unknown>;
+    return record.behaviorType === 'agentic';
 };
 
 export interface HandleMessageDeps {
@@ -77,7 +82,7 @@ export interface HandleMessageDeps {
     isGenerating: boolean;
     urlChatId: string | undefined;
     behaviorType: BehaviorType;
-    
+
     // Functions
     updateStage: (stageId: ProjectStage['id'], updates: Partial<Omit<ProjectStage, 'id'>>) => void;
     sendMessage: (message: ConversationMessage) => void;
@@ -98,6 +103,8 @@ export interface HandleMessageDeps {
         source?: string
     }) => void;
     onVaultUnlockRequired?: (reason: string) => void;
+    onEnvVarsUpdated?: (keys: string[]) => void;
+    onEnvVarsState?: (envVars: Record<string, string>) => void;
 }
 
 export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
@@ -163,7 +170,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
         // Log messages except for frequent ones
         if (message.type !== 'file_chunk_generated' && message.type !== 'cf_agent_state' && message.type.length <= 50) {
             logger.info('received message', message.type, message);
-            onDebugMessage?.('websocket', 
+            onDebugMessage?.('websocket',
                 `${message.type}`,
                 JSON.stringify(message, null, 2),
                 'WebSocket',
@@ -171,7 +178,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 message
             );
         }
-        
+
         switch (message.type) {
             case 'conversation_cleared': {
                 // Reset chat messages to a subtle tool-event entry indicating success
@@ -207,7 +214,10 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                         setQuery(state.query);
                     }
 
-                    if (previewUrl) {
+                    // For reconnects: Don't set stale preview URL — wait for
+                    // deployment_completed with fresh URL from new sandbox deployment.
+                    // Only set for new chats where the URL is current.
+                    if (previewUrl && urlChatId === 'new') {
                         setPreviewUrl(previewUrl);
                     }
 
@@ -248,18 +258,18 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                         logger.debug('📋 Restoring phase timeline:', state.generatedPhases);
                         // If not actively generating, mark incomplete phases as cancelled (they were interrupted)
                         const isActivelyGenerating = state.shouldBeGenerating === true;
-                        
+
                         const timeline = state.generatedPhases.map((phase, index: number) => {
                             // Determine phase status:
                             // - completed if explicitly marked complete
                             // - cancelled if incomplete and not actively generating (interrupted)
                             // - generating if incomplete and actively generating
-                            const phaseStatus = phase.completed 
-                                ? 'completed' as const 
-                                : !isActivelyGenerating 
-                                    ? 'cancelled' as const 
+                            const phaseStatus = phase.completed
+                                ? 'completed' as const
+                                : !isActivelyGenerating
+                                    ? 'cancelled' as const
                                     : 'generating' as const;
-                            
+
                             return {
                                 id: `phase-${index}`,
                                 name: phase.name,
@@ -271,10 +281,10 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                                     // - completed if it exists in generated files
                                     // - cancelled if missing and not actively generating (interrupted)
                                     // - generating if missing and actively generating
-                                    const fileStatus = file 
-                                        ? 'completed' as const 
-                                        : !isActivelyGenerating 
-                                            ? 'cancelled' as const 
+                                    const fileStatus = file
+                                        ? 'completed' as const
+                                        : !isActivelyGenerating
+                                            ? 'cancelled' as const
                                             : 'generating' as const;
                                     return {
                                         path: filesConcept.path,
@@ -288,13 +298,27 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                         });
                         setPhaseTimeline(timeline);
                     }
-                    
+
+                    // Restore phase timeline for agentic mode from completedMilestones
+                    if (isAgenticState(state) && state.completedMilestones?.length > 0 && phaseTimeline.length === 0) {
+                        logger.debug('📋 Restoring agentic phase timeline from completedMilestones:', state.completedMilestones);
+                        const timeline: PhaseTimelineItem[] = state.completedMilestones.map((milestone, index) => ({
+                            id: `milestone-${index}`,
+                            name: milestone,
+                            description: '',
+                            status: 'completed' as const,
+                            files: [],
+                            timestamp: Date.now(),
+                        }));
+                        setPhaseTimeline(timeline);
+                    }
+
                     updateStage('bootstrap', { status: 'completed' });
-                    
+
                     if (state.blueprint) {
                         updateStage('blueprint', { status: 'completed' });
                     }
-                    
+
                     if (state.generatedFilesMap && Object.keys(state.generatedFilesMap).length > 0) {
                         updateStage('code', { status: 'completed' });
                         if (urlChatId !== 'new') {
@@ -318,10 +342,10 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                     }
 
                     setIsInitialStateRestored(true);
-                    
+
                     if (state.shouldBeGenerating && !isGenerating) {
                         logger.debug('🔄 Reconnected with shouldBeGenerating=true, auto-resuming generation');
-                        setIsGenerating(true); 
+                        setIsGenerating(true);
                         updateStage('code', { status: 'active' });
                         sendWebSocketMessage(websocket, 'generate_all');
                     }
@@ -352,7 +376,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
             case 'cf_agent_state': {
                 const { state } = message;
                 logger.debug('🔄 Agent state update received:', state);
-                
+
                 // Sync projectType from backend if it changed
                 if (state.projectType) {
                     setInternalProjectType(state.projectType);
@@ -387,16 +411,16 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
 
                 const restoredMessages: ChatMessage[] = [];
                 let currentAssistant: ChatMessage | null = null;
-                
+
                 const ensureToolEvents = (assistant: ChatMessage) => {
                     if (!assistant.ui) assistant.ui = { toolEvents: [] };
                     if (!assistant.ui.toolEvents) assistant.ui.toolEvents = [];
                 };
-                
+
                 for (const msg of history) {
                     const text = extractTextContent(msg.content);
                     if (text?.includes('<Internal Memo>')) continue;
-                    
+
                     if (msg.role === 'user') {
                         restoredMessages.push({
                             role: 'user',
@@ -405,12 +429,12 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                         });
                         currentAssistant = null;
                     } else if (msg.role === 'assistant') {
-                        const content = msg.conversationId.startsWith('archive-') 
-                            ? 'previous history was compacted' 
+                        const content = msg.conversationId.startsWith('archive-')
+                            ? 'previous history was compacted'
                             : (text || '');
-                        
+
                         const hasToolCalls = msg.tool_calls && msg.tool_calls.length > 0;
-                        
+
                         // Merge all consecutive assistant messages into one bubble
                         if (currentAssistant) {
                             // Append content if present
@@ -451,18 +475,18 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 // Restore active debug session if one is running
                 if (deepDebugSession?.conversationId) {
                     setIsDebugging(true);
-                    
+
                     // Find if there's already a message with this conversationId
                     const existingMessageIndex = restoredMessages.findIndex(
                         m => m.role === 'assistant' && m.conversationId === deepDebugSession.conversationId
                     );
-                    
+
                     if (existingMessageIndex !== -1) {
                         // Update existing message to show as active debug
                         const existingMessage = restoredMessages[existingMessageIndex];
                         if (!existingMessage.ui) existingMessage.ui = {};
                         if (!existingMessage.ui.toolEvents) existingMessage.ui.toolEvents = [];
-                        
+
                         const debugEventIndex = existingMessage.ui.toolEvents.findIndex(e => e.name === 'deep_debug');
                         if (debugEventIndex === -1) {
                             existingMessage.ui.toolEvents.push({
@@ -497,54 +521,56 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 if (restoredMessages.length > 0) {
                     // Deduplicate assistant messages with identical content (even if separated by tool messages)
                     const deduplicated = deduplicateMessages(restoredMessages);
-                    
+
                     logger.debug('Merging conversation_state with', deduplicated.length, 'messages (', restoredMessages.length - deduplicated.length, 'duplicates removed)');
                     setMessages(prev => {
-                        const hasFetching = prev.some(m => m.role === 'assistant' && m.conversationId === 'fetching-chat');
-                        const hasReconnect = prev.some(m => m.role === 'assistant' && m.conversationId === 'websocket_reconnected');
-                        
-                        if (hasFetching) {
-                            const next = appendToolEvent(prev, 'fetching-chat', { 
-                                name: 'fetching your latest conversations', 
-                                status: 'success' 
+                        const fetchingMsg = prev.find(m => m.role === 'assistant' && m.conversationId === 'fetching-chat');
+                        const reconnectMsg = prev.find(m => m.role === 'assistant' && m.conversationId === 'websocket_reconnected');
+
+                        if (fetchingMsg) {
+                            // Only keep the fetching-chat UI message, not any other prev messages
+                            // deduplicated already contains the full conversation history
+                            const updated = appendToolEvent([fetchingMsg], 'fetching-chat', {
+                                name: 'fetching your latest conversations',
+                                status: 'success'
                             });
-                            return [...next, ...deduplicated];
+                            return [...updated, ...deduplicated];
                         }
-                        
-                        if (hasReconnect) {
-                            // Preserve reconnect message on top when restoring state after reconnect
-                            return [...prev, ...deduplicated];
+
+                        if (reconnectMsg) {
+                            // Only keep the reconnect UI message, not any other prev messages
+                            return [reconnectMsg, ...deduplicated];
                         }
-                        
+
                         return deduplicated;
                     });
                 }
                 break;
             }
 
-			case 'file_generating': {
-				setFiles((prev) => setFileGenerating(prev, message.filePath));
-				deps.onPresentationFileEvent?.({ type: 'file_generating', path: message.filePath });
-				break;
-			}
+            case 'file_generating': {
+                setFiles((prev) => setFileGenerating(prev, message.filePath));
+                deps.onPresentationFileEvent?.({ type: 'file_generating', path: message.filePath });
+                break;
+            }
 
-			case 'file_chunk_generated': {
-				setFiles((prev) => appendFileChunk(prev, message.filePath, message.chunk));
-				deps.onPresentationFileEvent?.({ type: 'file_chunk', path: message.filePath, chunk: message.chunk });
-				break;
-			}
+            case 'file_chunk_generated': {
+                setFiles((prev) => appendFileChunk(prev, message.filePath, message.chunk));
+                deps.onPresentationFileEvent?.({ type: 'file_chunk', path: message.filePath, chunk: message.chunk });
+                break;
+            }
 
-			case 'file_generated': {
-				setFiles((prev) => setFileCompleted(prev, message.file.filePath, message.file.fileContents));
-				setPhaseTimeline((prev) => updatePhaseFileStatus(
-					prev,
-					message.file.filePath,
-					'completed',
-					message.file.fileContents
-				));
-				deps.onPresentationFileEvent?.({ type: 'file_generated', path: message.file.filePath, contents: message.file.fileContents });
-				break;
-			}
+            case 'file_generated': {
+                setFiles((prev) => setFileCompleted(prev, message.file.filePath, message.file.fileContents));
+                setPhaseTimeline((prev) => updatePhaseFileStatus(
+                    prev,
+                    message.file.filePath,
+                    'completed',
+                    message.file.fileContents
+                ));
+                deps.onPresentationFileEvent?.({ type: 'file_generated', path: message.file.filePath, contents: message.file.fileContents });
+                break;
+            }
 
             case 'file_regenerated': {
                 setIsRedeployReady(true);
@@ -577,7 +603,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 setProjectStages((prev) => completeStages(prev, ['code']));
 
                 sendMessage(createAIMessage('generation-complete', 'Code generation has been completed.'));
-                
+
                 // Reset all phase indicators
                 setIsPhaseProgressActive(false);
                 setIsThinking(false);
@@ -593,7 +619,12 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
             case 'deployment_completed': {
                 setIsPreviewDeploying(false);
                 const finalPreviewURL = getPreviewUrl(message.previewURL, message.tunnelURL);
+                // Set new URL — preview component will detect the src change
+                // and restart its retry loop from attempt 0
                 setPreviewUrl(finalPreviewURL);
+                // Force preview refresh in case URL is same but sandbox is new
+                setShouldRefreshPreview(true);
+                setTimeout(() => setShouldRefreshPreview(false), 100);
                 break;
             }
 
@@ -620,11 +651,11 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
 
             case 'runtime_error_found': {
                 logger.info('Runtime error found in sandbox', message.errors);
-                
+
                 // Update runtime error count
                 deps.setRuntimeErrorCount(message.count || message.errors?.length || 0);
-                
-                onDebugMessage?.('error', 
+
+                onDebugMessage?.('error',
                     `Runtime Error (${message.count} errors)`,
                     message.errors.map((e: { message: string; stack?: string }) => `${e.message}\nStack: ${e.stack || 'N/A'}`).join('\n\n'),
                     'Runtime Detection'
@@ -678,7 +709,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
             case 'phase_implementing': {
                 sendMessage(createAIMessage('phase_implementing', message.message));
                 updateStage('code', { status: 'active' });
-                
+
                 if (message.phase) {
                     setPhaseTimeline(prev => {
                         const existingPhase = prev.find(p => p.name === message.phase.name);
@@ -686,7 +717,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                             logger.debug('Phase already exists in timeline:', message.phase.name);
                             return prev;
                         }
-                        
+
                         const newPhase = {
                             id: `${message.phase.name}-${Date.now()}`,
                             name: message.phase.name,
@@ -699,7 +730,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                             status: 'generating' as const,
                             timestamp: Date.now()
                         };
-                        
+
                         logger.debug('Added new phase to timeline:', message.phase.name);
                         return [...prev, newPhase];
                     });
@@ -709,7 +740,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
 
             case 'phase_validating': {
                 sendMessage(createAIMessage('phase_validating', message.message));
-                
+
                 setPhaseTimeline(prev => {
                     const updated = [...prev];
                     if (updated.length > 0) {
@@ -735,7 +766,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 updateStage('code', { status: 'completed' });
                 setIsRedeployReady(true);
                 setIsPhaseProgressActive(false);
-                
+
                 if (message.phase) {
                     setPhaseTimeline(prev => {
                         const updated = [...prev];
@@ -753,11 +784,11 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 setTimeout(() => {
                     logger.debug('🔄 Triggering preview refresh after deployment completion');
                     setShouldRefreshPreview(true);
-                    
+
                     setTimeout(() => {
                         setShouldRefreshPreview(false);
                     }, 100);
-                    
+
                     onDebugMessage?.('info',
                         'Preview Auto-Refresh Triggered',
                         `Preview refreshed 1 second after deployment completion`,
@@ -779,19 +810,19 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 setIsGenerating(false);
                 setIsGenerationPaused(true);
                 setIsDebugging(false);
-                
+
                 // Reset phase indicators
                 setIsPhaseProgressActive(false);
                 setIsThinking(false);
-                
+
                 // Mark any active phases as cancelled (not completed, since they were interrupted)
-                setPhaseTimeline((prev) => 
-                    prev.map(phase => 
+                setPhaseTimeline((prev) =>
+                    prev.map(phase =>
                         (phase.status === 'generating' || phase.status === 'validating')
-                            ? { 
-                                ...phase, 
+                            ? {
+                                ...phase,
                                 status: 'cancelled' as const,
-                                files: phase.files.map(file => 
+                                files: phase.files.map(file =>
                                     file.status === 'generating' || file.status === 'validating'
                                         ? { ...file, status: 'cancelled' as const }
                                         : file
@@ -800,12 +831,12 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                             : phase
                     )
                 );
-                
+
                 // Show toast notification for user-initiated stop
                 toast.info('Generation stopped', {
                     description: message.message || 'Code generation has been stopped'
                 });
-                
+
                 sendMessage(createAIMessage('generation_stopped', message.message));
                 break;
             }
@@ -830,7 +861,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 setDeploymentError('');
                 setIsRedeployReady(false);
 
-                sendMessage(createAIMessage('cloudflare_deployment_completed', `Your project has been permanently deployed to Cloudflare Workers: ${message.deploymentUrl}`));
+                sendMessage(createAIMessage('cloudflare_deployment_completed', `Your project has been deployed: ${message.deploymentUrl}`));
 
                 onDebugMessage?.('info',
                     'Deployment Completed - Redeploy Reset',
@@ -850,8 +881,8 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 sendMessage(createAIMessage('cloudflare_deployment_error', `Deployment failed: ${message.error}\n\nYou can try deploying again.`));
 
                 toast.error(`Error: ${message.error}`);
-                
-                onDebugMessage?.('error', 
+
+                onDebugMessage?.('error',
                     'Deployment Failed - State Reset',
                     `Error: ${message.error}\nDeployment button reset for retry`,
                     'Deployment Error Recovery'
@@ -878,7 +909,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 sendMessage(createAIMessage('github_export_error', `❌ GitHub export failed: ${message.error}`));
 
                 toast.error(`Error: ${message.error}`);
-                
+
                 break;
             }
 
@@ -904,10 +935,10 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
 
                 if (message.tool) {
                     const tool = message.tool;
-                    setMessages(prev => appendToolEvent(prev, conversationId, { 
-                        name: tool.name, 
+                    setMessages(prev => appendToolEvent(prev, conversationId, {
+                        name: tool.name,
                         status: tool.status,
-                        result: tool.result 
+                        result: tool.result
                     }));
                     break;
                 }
@@ -920,14 +951,14 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 setMessages(prev => {
                     const idx = prev.findIndex(m => m.role === 'assistant' && m.conversationId === conversationId);
                     if (idx !== -1) return prev.map((m, i) => i === idx ? { ...m, content: (isArchive ? placeholder : message.message) } : m);
-                    
+
                     // Deduplicate: Don't add if last assistant message has identical content
                     const newContent = isArchive ? placeholder : message.message;
                     if (isAssistantMessageDuplicate(prev, newContent)) {
                         logger.debug('Skipping duplicate assistant message');
                         return prev; // Skip duplicate
                     }
-                    
+
                     return [...prev, createAIMessage(conversationId, newContent)];
                 });
                 break;
@@ -1001,13 +1032,26 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                 break;
             }
 
+            case 'env_vars_updated': {
+                logger.info('Environment variables updated', message.keys);
+                toast.success(`Environment variables updated (${message.keys.length} keys). Preview rebuilding...`);
+                deps.onEnvVarsUpdated?.(message.keys);
+                break;
+            }
+
+            case 'env_vars_state': {
+                logger.info('Environment variables state received');
+                deps.onEnvVarsState?.(message.envVars);
+                break;
+            }
+
             case 'error': {
                 const errorData = message;
                 setMessages(prev => [
                     ...prev,
                     createAIMessage(`error_${Date.now()}`, `❌ ${errorData.error}`)
                 ]);
-                
+
                 onDebugMessage?.(
                     'error',
                     'WebSocket Error',
@@ -1026,7 +1070,7 @@ export function createWebSocketMessageHandler(deps: HandleMessageDeps) {
                     onDebugMessage
                 );
                 setMessages(prev => [...prev, rateLimitMessage]);
-                
+
                 break;
             }
 

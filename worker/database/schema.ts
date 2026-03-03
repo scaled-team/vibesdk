@@ -20,32 +20,32 @@ export const users = sqliteTable('users', {
     displayName: text('display_name').notNull(),
     avatarUrl: text('avatar_url'),
     bio: text('bio'),
-    
+
     // OAuth and Authentication
     provider: text('provider').notNull(), // 'github', 'google', 'email'
     providerId: text('provider_id').notNull(),
     emailVerified: integer('email_verified', { mode: 'boolean' }).default(false),
     passwordHash: text('password_hash'), // Only for provider: 'email'
-    
+
     // Security enhancements
     failedLoginAttempts: integer('failed_login_attempts').default(0),
     lockedUntil: integer('locked_until', { mode: 'timestamp' }),
     passwordChangedAt: integer('password_changed_at', { mode: 'timestamp' }),
-    
+
     // User Preferences and Settings
     preferences: text('preferences', { mode: 'json' }).default('{}'),
     theme: text('theme', { enum: ['light', 'dark', 'system'] }).default('system'),
     timezone: text('timezone').default('UTC'),
-    
+
     // Account Status
     isActive: integer('is_active', { mode: 'boolean' }).default(true),
     isSuspended: integer('is_suspended', { mode: 'boolean' }).default(false),
-    
+
     // Metadata
     createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
     lastActiveAt: integer('last_active_at', { mode: 'timestamp' }),
-    
+
     // Soft delete
     deletedAt: integer('deleted_at', { mode: 'timestamp' }),
 }, (table) => ({
@@ -64,21 +64,21 @@ export const users = sqliteTable('users', {
 export const sessions = sqliteTable('sessions', {
     id: text('id').primaryKey(),
     userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-    
+
     // Session Details
     deviceInfo: text('device_info'),
     userAgent: text('user_agent'),
     ipAddress: text('ip_address'),
-    
+
     // Security metadata
     isRevoked: integer('is_revoked', { mode: 'boolean' }).default(false),
     revokedAt: integer('revoked_at', { mode: 'timestamp' }),
     revokedReason: text('revoked_reason'),
-    
+
     // Token Management
     accessTokenHash: text('access_token_hash').notNull(),
     refreshTokenHash: text('refresh_token_hash').notNull(),
-    
+
     // Timing
     expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
     createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
@@ -98,20 +98,20 @@ export const sessions = sqliteTable('sessions', {
 export const apiKeys = sqliteTable('api_keys', {
     id: text('id').primaryKey(),
     userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-    
+
     // Key Details
     name: text('name').notNull(), // User-friendly name for the API key
     keyHash: text('key_hash').notNull().unique(), // Hashed API key for security
     keyPreview: text('key_preview').notNull(), // First few characters for display (e.g., "sk_prod_1234...")
-    
+
     // Security and Access Control
     scopes: text('scopes').notNull(), // JSON array of allowed scopes
     isActive: integer('is_active', { mode: 'boolean' }).default(true),
-    
+
     // Usage Tracking
     lastUsed: integer('last_used', { mode: 'timestamp' }),
     requestCount: integer('request_count').default(0), // Track usage
-    
+
     // Timing
     expiresAt: integer('expires_at', { mode: 'timestamp' }), // Optional expiration
     createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
@@ -132,48 +132,51 @@ export const apiKeys = sqliteTable('api_keys', {
  */
 export const apps = sqliteTable('apps', {
     id: text('id').primaryKey(),
-    
+
     // App Identity
     title: text('title').notNull(),
     description: text('description'),
     iconUrl: text('icon_url'), // App icon URL
-    
+
     // Original Generation Data
     originalPrompt: text('original_prompt').notNull(), // The user's original request
     finalPrompt: text('final_prompt'), // The processed/refined prompt used for generation
-    
+
     // Generated Content  
     framework: text('framework'), // 'react', 'vue', 'svelte', etc.
-    
+
     // Ownership and Context
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }), // Null for anonymous
     sessionToken: text('session_token'), // For anonymous users
-    
+    workspaceId: text('workspace_id'), // Link to external workspace
+    projectId: text('project_id'), // Link to external project
+
+
     // Visibility and Sharing
     visibility: text('visibility', { enum: ['private', 'public'] }).notNull().default('private'),
-    
+
     // Status and State
     status: text('status', { enum: ['generating', 'completed'] }).notNull().default('generating'),
-    
+
     // Deployment Information
     deploymentId: text('deployment_id'), // Deployment ID (extracted from deployment URL)
-    
+
     // GitHub Repository Integration
     githubRepositoryUrl: text('github_repository_url'), // GitHub repository URL
     githubRepositoryVisibility: text('github_repository_visibility', { enum: ['public', 'private'] }), // Repository visibility
-    
+
     // App Metadata
     isArchived: integer('is_archived', { mode: 'boolean' }).default(false),
     isFeatured: integer('is_featured', { mode: 'boolean' }).default(false), // Featured by admins
-    
+
     // Versioning (for future support)
     version: integer('version').default(1),
     parentAppId: text('parent_app_id'), // If forked from another app
-    
+
     // Screenshot Information
     screenshotUrl: text('screenshot_url'), // URL to saved screenshot image
     screenshotCapturedAt: integer('screenshot_captured_at', { mode: 'timestamp' }), // When screenshot was last captured
-    
+
     // Metadata
     createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
@@ -183,6 +186,7 @@ export const apps = sqliteTable('apps', {
     statusIdx: index('apps_status_idx').on(table.status),
     visibilityIdx: index('apps_visibility_idx').on(table.visibility),
     sessionTokenIdx: index('apps_session_token_idx').on(table.sessionToken),
+    workspaceProjectIdx: index('apps_workspace_project_idx').on(table.workspaceId, table.projectId),
     parentAppIdx: index('apps_parent_app_idx').on(table.parentAppId),
     // Performance indexes for common queries
     searchIdx: index('apps_search_idx').on(table.title, table.description),
@@ -232,10 +236,10 @@ export const appLikes = sqliteTable('app_likes', {
     id: text('id').primaryKey(),
     appId: text('app_id').notNull().references(() => apps.id, { onDelete: 'cascade' }),
     userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-    
+
     // Reaction Details
     reactionType: text('reaction_type').notNull().default('like'), // 'like', 'love', 'helpful', etc.
-    
+
     // Metadata
     createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
@@ -250,10 +254,10 @@ export const commentLikes = sqliteTable('comment_likes', {
     id: text('id').primaryKey(),
     commentId: text('comment_id').notNull().references(() => appComments.id, { onDelete: 'cascade' }),
     userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-    
+
     // Reaction Details
     reactionType: text('reaction_type').notNull().default('like'), // 'like', 'love', 'helpful', etc.
-    
+
     // Metadata
     createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
@@ -269,17 +273,17 @@ export const appComments = sqliteTable('app_comments', {
     id: text('id').primaryKey(),
     appId: text('app_id').notNull().references(() => apps.id, { onDelete: 'cascade' }),
     userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-    
+
     // Comment Content
     content: text('content').notNull(),
     parentCommentId: text('parent_comment_id'), // For threaded comments
-    
+
     // Moderation
     isEdited: integer('is_edited', { mode: 'boolean' }).default(false),
     isDeleted: integer('is_deleted', { mode: 'boolean' }).default(false),
-    
+
     // Removed likeCount and replyCount - use COUNT() queries with proper indexes instead
-    
+
     // Metadata
     createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
@@ -299,17 +303,17 @@ export const appComments = sqliteTable('app_comments', {
 export const appViews = sqliteTable('app_views', {
     id: text('id').primaryKey(),
     appId: text('app_id').notNull().references(() => apps.id, { onDelete: 'cascade' }),
-    
+
     // Viewer Information
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }), // Null for anonymous
     sessionToken: text('session_token'), // For anonymous tracking
     ipAddressHash: text('ip_address_hash'), // Hashed IP for privacy
-    
+
     // View Context
     referrer: text('referrer'),
     userAgent: text('user_agent'),
     deviceType: text('device_type'), // 'desktop', 'mobile', 'tablet'
-    
+
     // Timing
     viewedAt: integer('viewed_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
     durationSeconds: integer('duration_seconds'), // How long they viewed
@@ -331,16 +335,16 @@ export const oauthStates = sqliteTable('oauth_states', {
     id: text('id').primaryKey(),
     state: text('state').notNull().unique(), // OAuth state parameter
     provider: text('provider').notNull(), // 'github', 'google', etc.
-    
+
     // Flow Context
     redirectUri: text('redirect_uri'),
     scopes: text('scopes', { mode: 'json' }).default('[]'),
     userId: text('user_id').references(() => users.id), // If linking to existing account
-    
+
     // Security
     codeVerifier: text('code_verifier'), // For PKCE
     nonce: text('nonce'),
-    
+
     // Metadata
     createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
     expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
@@ -360,8 +364,8 @@ export const oauthStates = sqliteTable('oauth_states', {
 export const authAttempts = sqliteTable('auth_attempts', {
     id: integer('id').primaryKey({ autoIncrement: true }),
     identifier: text('identifier').notNull(),
-    attemptType: text('attempt_type', { 
-        enum: ['login', 'register', 'oauth_google', 'oauth_github', 'refresh', 'reset_password'] 
+    attemptType: text('attempt_type', {
+        enum: ['login', 'register', 'oauth_google', 'oauth_github', 'refresh', 'reset_password']
     }).notNull(),
     success: integer('success', { mode: 'boolean' }).notNull(),
     ipAddress: text('ip_address').notNull(),
@@ -452,7 +456,7 @@ export const auditLogs = sqliteTable('audit_logs', {
 export const userModelConfigs = sqliteTable('user_model_configs', {
     id: text('id').primaryKey(),
     userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-    
+
     // Configuration Details
     agentActionName: text('agent_action_name').notNull(), // Maps to AgentActionKey from config.ts
     modelName: text('model_name'), // Override for AIModels - null means use default
@@ -461,7 +465,7 @@ export const userModelConfigs = sqliteTable('user_model_configs', {
     reasoningEffort: text('reasoning_effort', { enum: REASONING_EFFORT_VALUES }), // Override reasoning effort  
     providerOverride: text('provider_override', { enum: PROVIDER_OVERRIDE_VALUES }), // Override provider
     fallbackModel: text('fallback_model'), // Override fallback model
-    
+
     // Status and Metadata
     isActive: integer('is_active', { mode: 'boolean' }).default(true),
     createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
@@ -478,12 +482,12 @@ export const userModelConfigs = sqliteTable('user_model_configs', {
 export const userModelProviders = sqliteTable('user_model_providers', {
     id: text('id').primaryKey(),
     userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-    
+
     // Provider Details
     name: text('name').notNull(), // User-friendly name (e.g., "My Local Ollama")
     baseUrl: text('base_url').notNull(), // OpenAI-compatible API base URL
     secretId: text('secret_id'),
-    
+
     // Status and Metadata
     isActive: integer('is_active', { mode: 'boolean' }).default(true),
     createdAt: integer('created_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
@@ -506,7 +510,7 @@ export const systemSettings = sqliteTable('system_settings', {
     key: text('key').notNull().unique(),
     value: text('value', { mode: 'json' }),
     description: text('description'),
-    
+
     // Metadata
     updatedAt: integer('updated_at', { mode: 'timestamp' }).default(sql`CURRENT_TIMESTAMP`),
     updatedBy: text('updated_by').references(() => users.id),

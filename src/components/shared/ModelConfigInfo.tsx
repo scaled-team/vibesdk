@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Info, Settings } from 'lucide-react';
+import { Info, Settings, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
 	Dialog,
 	DialogContent,
@@ -12,80 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { getModelDisplayName, getProviderInfo, categorizeAgent } from '@/utils/model-helpers';
 import { WORKFLOW_TABS } from '@/lib/constants/workflow-tabs';
-import type { AgentDisplayConfig, ModelConfigsInfo } from '@/api-types';
-
-function ConfigInfoCard({
-	agent,
-	userConfig,
-	defaultConfig,
-}: {
-	agent: AgentDisplayConfig;
-	userConfig?: ModelConfigsInfo['userConfigs'][string];
-	defaultConfig?: ModelConfigsInfo['defaultConfigs'][string];
-}) {
-	const isCustomized = userConfig?.isUserOverride || false;
-	const currentModel = userConfig?.name || defaultConfig?.name;
-	const modelDisplayName = getModelDisplayName(currentModel);
-	const providerInfo = getProviderInfo(currentModel);
-
-	const temperature = userConfig?.temperature ?? defaultConfig?.temperature;
-	const maxTokens = userConfig?.max_tokens ?? defaultConfig?.max_tokens;
-	const reasoningEffort = userConfig?.reasoning_effort ?? defaultConfig?.reasoning_effort;
-
-	return (
-		<div className="p-4 border rounded-lg bg-bg-3/50 space-y-3">
-			<div className="flex items-start justify-between gap-2">
-				<div className="flex items-start gap-2 min-w-0 flex-1">
-					<div className="p-1 rounded-sm bg-bg-3">
-						<Settings className="h-3 w-3" />
-					</div>
-					<div className="min-w-0 flex-1">
-						<h6 className="font-medium text-sm mb-1 text-text-secondary" title={agent.name}>
-							{agent.name}
-						</h6>
-						<p className="text-xs text-text-tertiary line-clamp-2" title={agent.description}>
-							{agent.description}
-						</p>
-					</div>
-				</div>
-
-				<Badge variant={isCustomized ? 'default' : 'outline'} className="text-xs shrink-0">
-					{isCustomized ? 'Custom' : 'Default'}
-				</Badge>
-			</div>
-
-			<div className="space-y-2">
-				<div className="flex items-center justify-between gap-2">
-					<span className="text-sm font-medium text-text-secondary" title={modelDisplayName}>
-						{modelDisplayName}
-					</span>
-					<Badge variant="secondary" className={`text-xs shrink-0 ${providerInfo.color}`}>
-						{providerInfo.name}
-					</Badge>
-				</div>
-
-				<div className="flex flex-wrap gap-1">
-					{temperature !== null && temperature !== undefined && (
-						<Badge variant="outline" className="text-xs">
-							T: {temperature}
-						</Badge>
-					)}
-					{maxTokens && (
-						<Badge variant="outline" className="text-xs">
-							{Math.round(maxTokens / 1000)}K tokens
-						</Badge>
-					)}
-					{reasoningEffort && (
-						<Badge variant="outline" className="text-xs">
-							{reasoningEffort.charAt(0).toUpperCase()}
-							{reasoningEffort.slice(1)}
-						</Badge>
-					)}
-				</div>
-			</div>
-		</div>
-	);
-}
+import type { ModelConfigsInfo } from '@/api-types';
 
 interface ModelConfigInfoProps {
 	configs?: ModelConfigsInfo;
@@ -95,7 +21,6 @@ interface ModelConfigInfoProps {
 
 export function ModelConfigInfo({ configs, onRequestConfigs, loading }: ModelConfigInfoProps) {
 	const [isOpen, setIsOpen] = useState(false);
-	const [activeTab, setActiveTab] = useState('quickstart');
 
 	const handleOpen = () => {
 		setIsOpen(true);
@@ -104,15 +29,15 @@ export function ModelConfigInfo({ configs, onRequestConfigs, loading }: ModelCon
 		}
 	};
 
-	const getAgentsForTab = (tabId: string) => {
-		if (!configs) return [];
-		return configs.agents.filter((agent) => categorizeAgent(agent.key) === tabId);
-	};
-
-	const getCustomizedCountForTab = (tabId: string) => {
-		const agents = getAgentsForTab(tabId);
-		return agents.filter((agent) => configs?.userConfigs[agent.key]?.isUserOverride).length;
-	};
+	// Group agents by workflow tab
+	const groupedAgents = configs
+		? Object.values(WORKFLOW_TABS)
+			.map((tab) => ({
+				tab,
+				agents: configs.agents.filter((a) => categorizeAgent(a.key) === tab.id),
+			}))
+			.filter((group) => group.agents.length > 0)
+		: [];
 
 	return (
 		<>
@@ -129,97 +54,107 @@ export function ModelConfigInfo({ configs, onRequestConfigs, loading }: ModelCon
 			</button>
 
 			<Dialog open={isOpen} onOpenChange={setIsOpen}>
-				<DialogContent className="max-w-4xl w-[90vw] max-h-[90vh] overflow-y-auto">
+				<DialogContent className="max-w-2xl w-[90vw] max-h-[85vh] overflow-y-auto">
 					<DialogHeader>
-						<DialogTitle className="flex items-center gap-2">
-							<Info className="h-5 w-5" />
-							Current Model Configurations
+						<DialogTitle className="flex items-center gap-2 text-base">
+							<Settings className="h-4 w-4" />
+							Model Configurations
 						</DialogTitle>
-						<DialogDescription>
-							View the AI model settings currently being used for generation (defaults + overrides).
+						<DialogDescription className="text-xs">
+							Current AI model settings for each workflow stage.
 						</DialogDescription>
 					</DialogHeader>
 
 					{loading ? (
-						<div className="flex items-center gap-3 p-8">
-							<Settings className="h-5 w-5 animate-spin text-text-tertiary" />
-							<span className="text-sm text-text-tertiary">Loading model configurations...</span>
+						<div className="flex items-center justify-center gap-2 py-12">
+							<Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />
+							<span className="text-sm text-text-tertiary">Loading configurations…</span>
 						</div>
 					) : !configs ? (
-						<div className="text-center py-8 text-text-tertiary">
-							<p>No configuration data available.</p>
-							<Button
-								variant="outline"
-								size="sm"
-								onClick={onRequestConfigs}
-								className="mt-4"
-							>
+						<div className="text-center py-12 text-text-tertiary">
+							<p className="text-sm">Failed to load configurations.</p>
+							<Button variant="outline" size="sm" onClick={onRequestConfigs} className="mt-3">
 								Retry
 							</Button>
 						</div>
 					) : (
-						<Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-							<TabsList className="grid w-full grid-cols-5 h-12">
-								{Object.values(WORKFLOW_TABS).map((tab) => {
-									const customizedCount = getCustomizedCountForTab(tab.id);
-
-									return (
-										<TabsTrigger
-											key={tab.id}
-											value={tab.id}
-											className="flex flex-col gap-1 py-2 relative justify-center"
-										>
-											<div className="flex items-center gap-2">
-												<span className="hidden sm:inline text-xs">{tab.label}</span>
-												<span className="sm:hidden text-xs">{tab.label.split(' ')[0]}</span>
-											</div>
-											{customizedCount > 0 && (
-												<Badge
-													variant="secondary"
-													className="text-xs absolute -top-1 -right-1 h-4 w-4 rounded-full p-0 flex items-center justify-center text-[10px]"
-												>
-													{customizedCount}
-												</Badge>
-											)}
-										</TabsTrigger>
-									);
-								})}
-							</TabsList>
-
-							{Object.values(WORKFLOW_TABS).map((tab) => {
-								const agents = getAgentsForTab(tab.id);
-
+						<div className="space-y-5 -mt-1">
+							{groupedAgents.map(({ tab, agents }) => {
+								const Icon = tab.icon;
 								return (
-									<TabsContent key={tab.id} value={tab.id} className="mt-6">
-										<div className="space-y-4">
-											<div className="text-sm text-text-tertiary">
-												{tab.description} • {agents.length} agent{agents.length !== 1 ? 's' : ''}
-												{getCustomizedCountForTab(tab.id) > 0 && (
-													<span className="ml-2 text-text-primary font-medium">
-														({getCustomizedCountForTab(tab.id)} customized)
-													</span>
-												)}
-											</div>
-
-											{agents.length === 0 ? (
-												<div className="text-center py-8 text-text-tertiary">No agents in this category.</div>
-											) : (
-												<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-													{agents.map((agent) => (
-														<ConfigInfoCard
-															key={agent.key}
-															agent={agent}
-															userConfig={configs.userConfigs[agent.key]}
-															defaultConfig={configs.defaultConfigs[agent.key]}
-														/>
-													))}
-												</div>
-											)}
+									<div key={tab.id}>
+										{/* Section header */}
+										<div className="flex items-center gap-2 mb-2.5">
+											<Icon className="h-3.5 w-3.5 text-text-tertiary" />
+											<span className="text-xs font-semibold uppercase tracking-wider text-text-tertiary">
+												{tab.label}
+											</span>
+											<div className="flex-1 h-px bg-border-primary/30" />
 										</div>
-									</TabsContent>
+
+										{/* Agent rows */}
+										<div className="space-y-1">
+											{agents.map((agent) => {
+												const userConfig = configs.userConfigs[agent.key];
+												const defaultConfig = configs.defaultConfigs[agent.key];
+												const isCustomized = userConfig?.isUserOverride || false;
+												const currentModel = userConfig?.name || defaultConfig?.name;
+												const modelDisplayName = getModelDisplayName(currentModel);
+												const providerInfo = getProviderInfo(currentModel);
+												const temperature = userConfig?.temperature ?? defaultConfig?.temperature;
+												const reasoningEffort = userConfig?.reasoning_effort ?? defaultConfig?.reasoning_effort;
+
+												return (
+													<div
+														key={agent.key}
+														className="flex items-center justify-between gap-3 px-3 py-2 rounded-md hover:bg-bg-3/60 transition-colors group/row"
+													>
+														{/* Agent name */}
+														<div className="min-w-0 flex-shrink-0 w-[140px]">
+															<span className="text-sm font-medium text-text-primary truncate block" title={agent.name}>
+																{agent.name}
+															</span>
+														</div>
+
+														{/* Model + provider */}
+														<div className="flex items-center gap-1.5 min-w-0 flex-1">
+															<span className="text-xs text-text-secondary truncate" title={modelDisplayName}>
+																{modelDisplayName}
+															</span>
+															<Badge
+																variant="secondary"
+																className={`text-[10px] px-1 py-0 shrink-0 ${providerInfo.color}`}
+															>
+																{providerInfo.name}
+															</Badge>
+														</div>
+
+														{/* Parameters */}
+														<div className="flex items-center gap-1 shrink-0">
+															{temperature !== null && temperature !== undefined && (
+																<span className="text-[10px] text-text-tertiary font-mono">
+																	T:{temperature}
+																</span>
+															)}
+															{reasoningEffort && (
+																<span className="text-[10px] text-text-tertiary font-mono">
+																	{reasoningEffort.charAt(0).toUpperCase()}
+																</span>
+															)}
+															{isCustomized && (
+																<Badge variant="default" className="text-[10px] px-1 py-0 ml-1">
+																	Custom
+																</Badge>
+															)}
+														</div>
+													</div>
+												);
+											})}
+										</div>
+									</div>
 								);
 							})}
-						</Tabs>
+						</div>
 					)}
 				</DialogContent>
 			</Dialog>

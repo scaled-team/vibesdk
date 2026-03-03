@@ -114,18 +114,26 @@ export function appendFileChunk(
 }
 
 /**
- * Mark file as completed
+ * Mark file as completed, capturing previous content for diff view
  */
 export function setFileCompleted(
     files: FileType[],
     filePath: string,
     fileContents: string
 ): FileType[] {
+    const existingFile = files.find(f => f.filePath === filePath);
+    // Capture the current content as previousContents (for diff view)
+    // Only capture if the file existed and had non-empty content that differs
+    const previousContents = existingFile?.fileContents && existingFile.fileContents !== fileContents
+        ? existingFile.fileContents
+        : existingFile?.previousContents; // preserve existing previousContents if content unchanged
+
     return updateFileInArray(files, filePath, {
         fileContents,
         isGenerating: false,
         needsFixing: false,
         hasErrors: false,
+        previousContents,
     });
 }
 

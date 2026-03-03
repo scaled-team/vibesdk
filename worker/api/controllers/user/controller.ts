@@ -15,7 +15,7 @@ const logger = createLogger('UserController');
  */
 export class UserController extends BaseController {
     static logger = logger;
-    
+
     /**
      * Get user's apps with pagination and filtering
      */
@@ -34,7 +34,9 @@ export class UserController extends BaseController {
             const order = (url.searchParams.get('order') || 'desc') as SortOrder;
             const period = (url.searchParams.get('period') || 'all') as TimePeriod;
             const offset = (page - 1) * limit;
-            
+            const workspaceId = url.searchParams.get('workspaceId') || undefined;
+            const projectId = url.searchParams.get('projectId') || undefined;
+
             const queryOptions = {
                 limit,
                 offset,
@@ -44,11 +46,13 @@ export class UserController extends BaseController {
                 search,
                 sort,
                 order,
-                period
+                period,
+                workspaceId,
+                projectId
             };
 
             const appService = new AppService(env);
-            
+
             // Get user apps with analytics and proper total count
             const [apps, totalCount] = await Promise.all([
                 appService.getUserAppsWithAnalytics(user.id, queryOptions),

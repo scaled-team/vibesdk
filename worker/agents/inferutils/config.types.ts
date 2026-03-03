@@ -114,6 +114,16 @@ const MODELS_MASTER = {
             contextSize: 1048576, // 1M Context
         }
     },
+    GEMINI_3_1_PRO_PREVIEW: {
+        id: 'google-ai-studio/gemini-3.1-pro-preview',
+        config: {
+            name: 'Gemini 3.1 Pro Preview',
+            size: ModelSize.LARGE,
+            provider: 'google-ai-studio',
+            creditCost: 8, // $2.00
+            contextSize: 1048576, // 1M Context
+        }
+    },
 
     // --- Anthropic Models ---
     CLAUDE_3_7_SONNET_20250219: {
@@ -166,6 +176,26 @@ const MODELS_MASTER = {
             contextSize: 200000, // 200K Context
         }
     },
+    CLAUDE_4_6_OPUS: {
+        id: 'anthropic/claude-opus-4-6',
+        config: {
+            name: 'Claude 4.6 Opus',
+            size: ModelSize.LARGE,
+            provider: 'anthropic',
+            creditCost: 20, // $5.00
+            contextSize: 1000000, // 1M Context (beta)
+        }
+    },
+    CLAUDE_4_6_SONNET: {
+        id: 'anthropic/claude-sonnet-4-6',
+        config: {
+            name: 'Claude 4.6 Sonnet',
+            size: ModelSize.LARGE,
+            provider: 'anthropic',
+            creditCost: 12, // $3.00
+            contextSize: 1000000, // 1M Context (beta)
+        }
+    },
 
     // --- OpenAI Models ---
     OPENAI_5: {
@@ -205,6 +235,26 @@ const MODELS_MASTER = {
             size: ModelSize.LITE,
             provider: 'openai',
             creditCost: 1, // $0.25 (BASELINE)
+            contextSize: 400000, // 400K Context
+        }
+    },
+    OPENAI_5_3_CODEX: {
+        id: 'openai/gpt-5-3-codex',
+        config: {
+            name: 'GPT-5.3 Codex',
+            size: ModelSize.LARGE,
+            provider: 'openai',
+            creditCost: 7, // $1.75
+            contextSize: 400000, // 400K Context
+        }
+    },
+    OPENAI_5_3_CODEX_SPARK: {
+        id: 'openai/gpt-5-3-codex-spark',
+        config: {
+            name: 'GPT-5.3 Codex Spark',
+            size: ModelSize.REGULAR,
+            provider: 'openai',
+            creditCost: 3, // ~$0.75
             contextSize: 400000, // 400K Context
         }
     },
@@ -420,14 +470,16 @@ export type AgentActionKey = keyof AgentConfig;
 export type InferenceMetadata = {
     agentId: string;
     userId: string;
+    workspaceId?: string;
+    projectId?: string;
     // llmRateLimits: LLMCallsRateLimitConfig;
 }
 
 export type InferenceRuntimeOverrides = {
-	/** Provider API keys (BYOK) keyed by provider id, e.g. "openai" -> key. */
-	userApiKeys?: Record<string, string>;
-	/** Optional AI gateway override (baseUrl + token). */
-	aiGatewayOverride?: { baseUrl: string; token: string };
+    /** Provider API keys (BYOK) keyed by provider id, e.g. "openai" -> key. */
+    userApiKeys?: Record<string, string>;
+    /** Optional AI gateway override (baseUrl + token). */
+    aiGatewayOverride?: { baseUrl: string; token: string };
 };
 
 /**
@@ -447,32 +499,32 @@ export interface InferenceContext {
  * SDK-facing credential payload
  */
 export type CredentialsPayload = {
-	providers?: Record<string, { apiKey: string }>;
-	aiGateway?: { baseUrl: string; token: string };
+    providers?: Record<string, { apiKey: string }>;
+    aiGateway?: { baseUrl: string; token: string };
 };
 
 export function credentialsToRuntimeOverrides(
-	credentials: CredentialsPayload | undefined,
+    credentials: CredentialsPayload | undefined,
 ): InferenceRuntimeOverrides | undefined {
-	if (!credentials) return undefined;
+    if (!credentials) return undefined;
 
-	const userApiKeys: Record<string, string> = {};
-	for (const [provider, v] of Object.entries(credentials.providers ?? {})) {
-		if (v.apiKey) userApiKeys[provider] = v.apiKey;
-	}
+    const userApiKeys: Record<string, string> = {};
+    for (const [provider, v] of Object.entries(credentials.providers ?? {})) {
+        if (v.apiKey) userApiKeys[provider] = v.apiKey;
+    }
 
-	const hasKeys = Object.keys(userApiKeys).length > 0;
-	return {
-		...(hasKeys ? { userApiKeys } : {}),
-		...(credentials.aiGateway ? { aiGatewayOverride: credentials.aiGateway } : {}),
-	};
+    const hasKeys = Object.keys(userApiKeys).length > 0;
+    return {
+        ...(hasKeys ? { userApiKeys } : {}),
+        ...(credentials.aiGateway ? { aiGatewayOverride: credentials.aiGateway } : {}),
+    };
 }
 
 export function isValidAIModel(value: string): value is AIModels {
-  return Object.values(AIModels).includes(value as AIModels);
+    return Object.values(AIModels).includes(value as AIModels);
 }
 
 export function toAIModel(value: string | null | undefined): AIModels | undefined {
-  if (!value) return undefined;
-  return isValidAIModel(value) ? value : undefined;
+    if (!value) return undefined;
+    return isValidAIModel(value) ? value : undefined;
 }

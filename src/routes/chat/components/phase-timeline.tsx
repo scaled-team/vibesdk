@@ -34,8 +34,7 @@ const getPhaseByStatus = (phases: PhaseTimelineItem[], status: PhaseTimelineItem
 const getLastCompletedPhase = (phases: PhaseTimelineItem[]) =>
 	[...phases].reverse().find(p => p.status === 'completed');
 
-const getCompletedPhaseCount = (phases: PhaseTimelineItem[]) =>
-	phases.filter(p => p.status === 'completed').length;
+
 
 // Consolidated status-specific loader components
 interface StatusLoaderProps {
@@ -173,6 +172,7 @@ function AnimatedStatusIndicator({ status, size = 5 }: AnimatedStatusIndicatorPr
 interface PhaseTimelineProps {
 	projectStages: ProjectStage[];
 	phaseTimeline: PhaseTimelineItem[];
+	planMilestones?: string[];
 	files: FileType[];
 	view: string;
 	activeFile?: FileType;
@@ -263,6 +263,7 @@ function calculateIncrementalLineCount(
 export function PhaseTimeline({
 	projectStages,
 	phaseTimeline,
+	planMilestones,
 	files,
 	view,
 	activeFile,
@@ -288,6 +289,22 @@ export function PhaseTimeline({
 	const componentRef = useRef<HTMLDivElement>(null);
 	const lastPhaseRef = useRef<HTMLDivElement>(null);
 	const timelineCardRef = useRef<HTMLDivElement>(null);
+
+	// Compute pending milestones from blueprint plan that haven't started yet
+	const pendingMilestones = useMemo(() => {
+		if (!planMilestones || planMilestones.length === 0) return [];
+
+		return planMilestones.filter(milestone => {
+			// Check if any phase in the timeline matches this milestone
+			return !phaseTimeline.some(phase => {
+				const phaseName = phase.name.toLowerCase();
+				const milestoneName = milestone.toLowerCase();
+				return phaseName === milestoneName ||
+					phaseName.includes(milestoneName) ||
+					milestoneName.includes(phaseName);
+			});
+		});
+	}, [planMilestones, phaseTimeline]);
 
 	// Auto-expand only the currently generating or validating phase
 	useEffect(() => {
@@ -337,8 +354,7 @@ export function PhaseTimeline({
 
 	// Get current status info for the collapsed bar
 	const collapsedBarInfo = useMemo(() => {
-		const completedPhases = getCompletedPhaseCount(phaseTimeline);
-		const phaseBadge = phaseTimeline.length > 0 ? `${completedPhases}/${phaseTimeline.length}` : undefined;
+		const phaseBadge = total > 1 ? `${progress}/${total}` : undefined;
 
 		const validatingPhase = getPhaseByStatus(phaseTimeline, 'validating');
 		if (validatingPhase) {
@@ -352,9 +368,10 @@ export function PhaseTimeline({
 
 		const generatingPhase = getPhaseByStatus(phaseTimeline, 'generating');
 		if (generatingPhase) {
+			const remaining = pendingMilestones.length;
 			return {
 				text: `Implementing: ${truncatePhaseName(generatingPhase.name)}`,
-				subtitle: `${progress}/${total} phases`,
+				subtitle: remaining > 0 ? `${progress}/${total} phases · ${remaining} remaining` : `${progress}/${total} phases`,
 				icon: <StatusLoader color="accent" />,
 				badge: phaseBadge
 			};
@@ -395,7 +412,7 @@ export function PhaseTimeline({
 			icon: <div className="w-4 h-4 bg-gradient-to-br from-zinc-300/30 to-zinc-400/20 dark:from-zinc-600/30 dark:to-zinc-700/20 rounded-full" />,
 			badge: undefined
 		};
-	}, [phaseTimeline, isThinkingNext, isPreviewDeploying, progress, total, projectStages]);
+	}, [phaseTimeline, isThinkingNext, isPreviewDeploying, progress, total, projectStages, pendingMilestones]);
 
 	const togglePhase = (phaseId: string) => {
 		setExpandedPhases(prev => {
@@ -537,8 +554,8 @@ export function PhaseTimeline({
                                         }}
                                         disabled={!!isDeploying}
                                         className="ml-2 flex items-center gap-1.5 px-2.5 py-1 bg-accent hover:bg-accent/90 disabled:bg-accent/50 text-white rounded-full text-xs font-medium transition-colors disabled:cursor-not-allowed"
-                                        title={isDeploying ? 'Deploying...' : 'Deploy to Cloudflare'}
-                                        aria-label={isDeploying ? 'Deploying' : 'Deploy to Cloudflare'}
+                                        title={isDeploying ? 'Deploying...' : 'Deploy'}
+                                        aria-label={isDeploying ? 'Deploying' : 'Deploy'}
                                     >
                                         {isDeploying ? (
                                             <StatusLoader size="sm" color="accent" />
@@ -633,7 +650,7 @@ export function PhaseTimeline({
 														) : (
 															<Zap className="w-3 h-3" />
 														)}
-														{isDeploying ? 'Deploying...' : 'Deploy to Cloudflare'}
+														{isDeploying ? 'Deploying...' : 'Deploy'}
 													</button>
 												)}
 											</div>
@@ -857,7 +874,29 @@ export function PhaseTimeline({
 										</div>
 									))}
 
-									{/* Validation/Preview deployment indicator */}
+									{/* Pending milestones queue from blueprint plan */}
+								{pendingMilestones.length > 0 && (
+									<div className="space-y-0.5 relative mt-1">
+										{phaseTimeline.length > 0 && (
+											<div className="absolute left-[5px] w-[0.5px] h-full top-0 bg-border-primary/20" />
+										)}
+										{pendingMilestones.map((milestone, index) => (
+											<div
+												key={`pending-${index}`}
+												className="flex items-start gap-2 relative z-0 w-full text-left px-1 py-0.5"
+											>
+												<div className="flex-shrink-0 mt-0.5">
+													<StatusIcon status="pending" size="sm" />
+												</div>
+												<span className="text-xs text-text-tertiary/50">
+													{truncatePhaseName(milestone)}
+												</span>
+											</div>
+										))}
+									</div>
+								)}
+
+								{/* Validation/Preview deployment indicator */}
 									{(() => {
 										const validatingPhase = getPhaseByStatus(phaseTimeline, 'validating');
 										if (validatingPhase) {

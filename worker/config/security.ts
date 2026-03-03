@@ -41,29 +41,32 @@ export function getConfigurableSecurityDefaults(): ConfigurableSecuritySettings 
  */
 export function getAllowedOrigins(env: Env): string[] {
     const origins: string[] = [];
-    
+
     // Production domains
     if (env.CUSTOM_DOMAIN) {
         origins.push(`https://${env.CUSTOM_DOMAIN}`);
     }
-    
+
+    // Delegate platform always runs locally and embeds the VibeSDK
+    origins.push('http://localhost:8080');
+    origins.push('http://localhost:3000');
+
     // Development origins (only in development)
     if (isDev(env)) {
-        origins.push('http://localhost:3000');
         origins.push('http://localhost:5173');
         origins.push('http://localhost:8787');
         origins.push('http://127.0.0.1:3000');
         origins.push('http://127.0.0.1:5173');
         origins.push('http://127.0.0.1:8787');
     }
-    
+
     return origins;
 }
 
 export function isOriginAllowed(env: Env, origin: string): boolean {
     const allowedOrigins = getAllowedOrigins(env);
     if (!origin) return false;
-    
+
     // Check against allowed origins
     return allowedOrigins.includes(origin);
 }
@@ -151,7 +154,7 @@ interface SecureHeadersConfig {
  */
 export function getSecureHeadersConfig(env: Env): SecureHeadersConfig {
     const isDevelopment = isDev(env);
-    
+
     return {
         // Content Security Policy - strict by default
         contentSecurityPolicy: {
@@ -160,6 +163,8 @@ export function getSecureHeadersConfig(env: Env): SecureHeadersConfig {
                 "'self'",
                 // Allow inline scripts with nonce (Hono will add nonce automatically)
                 "'strict-dynamic'",
+                // Cloudflare analytics
+                "https://static.cloudflareinsights.com",
                 // Development only - for hot reload
                 ...(isDevelopment ? ["'unsafe-eval'"] : [])
             ],
@@ -196,46 +201,51 @@ export function getSecureHeadersConfig(env: Env): SecureHeadersConfig {
             mediaSrc: ["'self'"],
             workerSrc: ["'self'", "blob:"],
             formAction: ["'self'"],
-            frameAncestors: ["'none'"],
+            frameAncestors: [
+                "'self'",
+                "http://localhost:8080",
+                "http://localhost:3000",
+                "https://*.crfty.cc"
+            ],
             baseUri: ["'self'"],
             manifestSrc: ["'self'"],
             upgradeInsecureRequests: !isDevelopment ? [] : undefined
         },
-        
+
         // Strict Transport Security (HSTS)
-        strictTransportSecurity: isDevelopment 
+        strictTransportSecurity: isDevelopment
             ? undefined // Don't set in development
             : 'max-age=31536000; includeSubDomains; preload',
-        
-        // X-Frame-Options - Prevent clickjacking
-        xFrameOptions: 'DENY',
-        
+
+        // X-Frame-Options - Prevent clickjacking (Disabled to rely on CSP frame-ancestors for iframe embedding)
+        xFrameOptions: false,
+
         // X-Content-Type-Options - Prevent MIME sniffing
         xContentTypeOptions: 'nosniff',
-        
+
         // X-XSS-Protection - Legacy XSS protection
         xXssProtection: '1; mode=block',
-        
+
         // Referrer Policy - Privacy-focused
         referrerPolicy: 'strict-origin-when-cross-origin',
-        
-        // Cross-Origin policies
-        crossOriginEmbedderPolicy: 'require-corp',
-        crossOriginResourcePolicy: 'same-origin',
-        crossOriginOpenerPolicy: 'same-origin',
-        
+
+        // Cross-Origin policies - Disabled for iframe embedding
+        crossOriginEmbedderPolicy: false,
+        crossOriginResourcePolicy: false,
+        crossOriginOpenerPolicy: false,
+
         // Origin Agent Cluster
         originAgentCluster: '?1',
-        
+
         // X-DNS-Prefetch-Control
         xDnsPrefetchControl: 'off',
-        
+
         // X-Download-Options - IE specific
         xDownloadOptions: 'noopen',
-        
+
         // X-Permitted-Cross-Domain-Policies
         xPermittedCrossDomainPolicies: 'none',
-        
+
         // Permissions Policy - Feature restrictions
         permissionsPolicy: {
             camera: [],

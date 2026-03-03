@@ -8,8 +8,8 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: 'system',
-  setTheme: () => {},
+  theme: 'dark',
+  setTheme: () => { },
 });
 
 export const useTheme = () => {
@@ -27,7 +27,7 @@ interface ThemeProviderProps {
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(() => {
     const savedTheme = localStorage.getItem('theme') as Theme;
-    return savedTheme || 'system';
+    return savedTheme || 'dark';
   });
 
   const applyTheme = (newTheme: Theme) => {
@@ -53,8 +53,31 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
       }
     };
 
+    // Listen for messages from parent Delegate iframe
+    const handleMessage = (event: MessageEvent) => {
+      // Theme sync
+      if (event.data?.type === 'delegate-theme-sync' && (event.data.theme === 'dark' || event.data.theme === 'light')) {
+        const newTheme = event.data.theme as Theme;
+        setTheme(newTheme);
+        localStorage.setItem('theme', newTheme);
+        applyTheme(newTheme);
+      }
+      // Workspace context injection from Delegate
+      if (event.data?.type === 'delegate-context-inject' && event.data.context) {
+        try {
+          localStorage.setItem('vibesdk_delegateContext', JSON.stringify(event.data.context));
+        } catch {
+          // Non-fatal: localStorage quota or serialization error
+        }
+      }
+    };
+
     mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
+    window.addEventListener('message', handleMessage);
+    return () => {
+      mediaQuery.removeEventListener('change', handleChange);
+      window.removeEventListener('message', handleMessage);
+    };
   }, [theme]);
 
   const handleSetTheme = (newTheme: Theme) => {

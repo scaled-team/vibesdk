@@ -53,6 +53,9 @@ Provide detailed, specific requirements. The more detail, the better the results
 
 				const result = await agent.generateFiles(phase_name, phase_description, requirements, fileConcepts);
 
+				// Record milestone completion for persistent phase tracking
+				agent.recordCompletedMilestone(phase_name);
+
 				return {
 					files: result.files.map((f) => ({
 						path: f.path,

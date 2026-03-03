@@ -23,6 +23,8 @@ export type RuntimeType = 'sandbox' | 'worker' | 'none';
 /** Base initialization arguments shared by all agents */
 interface BaseAgentInitArgs {
     query: string;
+    /** Optional workspace context from Delegate (markdown-formatted) */
+    context?: string;
     hostname: string;
     inferenceContext: InferenceContext;
     language?: string;

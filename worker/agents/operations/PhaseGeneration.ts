@@ -34,7 +34,7 @@ const SYSTEM_PROMPT = `<ROLE>
        - **Visual Excellence**: Modern, professional UI using Tailwind CSS best practices
        - **User Experience**: Intuitive navigation, clear information hierarchy, responsive design
        - **Interactive Elements**: Smooth animations, proper loading states, engaging micro-interactions
-       - **Accessibility**: Proper semantic HTML, ARIA labels, keyboard navigation
+       - **Accessibility**: Proper semantic HTML elements (nav, main, section, article, button)
        - **Supreme software development practices**: Follow the best coding principles and practices, and lay out the codebase in a way that is easy to maintain, extend and debug.
     4. **VALIDATE** that the phase will be deployable with all views/pages working beautifully across devices
 
@@ -118,9 +118,9 @@ Adhere to the following guidelines:
     - Focus on deployment-blocking issues over linting warnings
     - You would be provided with the diff of the last phase. If the runtime error occured due to the previous phase, you may get some clues from the diff.
 •   Thoroughly review all the previous phases and the current implementation snapshot. Verify the frontend elements, UI, and backend components.
-    - **Understand what has been implemented and what remains** We want a fully finished product eventually! No feature should be left unimplemented if its possible to implement it in the current project environment with purely open source tools and free tier services (i.e, without requiring any third party paid/API key service).
+    - **Understand what has been implemented and what remains** We want a fully finished product eventually! No feature should be left unimplemented. Use real SDKs and libraries for all features — when a third-party service requires API keys, use placeholder test keys (e.g. \`pk_test_PLACEHOLDER\`, \`sk_test_PLACEHOLDER\`) or environment variable references so the user can swap in real credentials after export.
     - Each phase should advance toward the final product. **ONLY** mark as last phase if you are sure the project is at least >97% finished already.
-    - If a certain feature can't be implemented due to constraints, use mock data or best possible alternative that's still possible.
+    - **Prefer real implementations over mocks.** Only fall back to mock data when no SDK or library exists for the feature. Never use mocks when a real SDK integration with placeholder keys would work.
     - Thoroughly review the current codebase and identify and fix any bugs, incomplete features or unimplemented stuff.
 •    **BEAUTIFUL UI PRIORITY**: Next phase should cover fixes (if any), development, AND significant focus on creating visually stunning, professional-grade UI/UX with:
     - Modern design patterns and visual hierarchy

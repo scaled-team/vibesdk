@@ -54,12 +54,9 @@ function accumulateToolCallDelta(
     // Look up existing entry by id or index
     if (idFromDelta && byId.has(idFromDelta)) {
         entry = byId.get(idFromDelta)!;
-        console.log(`[TOOL_CALL_DEBUG] Found existing entry by id: ${idFromDelta}`);
     } else if (idx !== undefined && byIndex.has(idx)) {
         entry = byIndex.get(idx)!;
-        console.log(`[TOOL_CALL_DEBUG] Found existing entry by index: ${idx}`);
     } else {
-        console.log(`[TOOL_CALL_DEBUG] Creating new entry - id: ${idFromDelta}, index: ${idx}`);
         // Create new entry
         const provisionalId = idFromDelta || synthIdForIndex(idx ?? byId.size);
         entry = {
@@ -117,16 +114,7 @@ function accumulateToolCallDelta(
         if (!isComplete) {
             entry.function.arguments += chunk;
 
-            // Debug logging for tool call argument accumulation
-            console.log(`[TOOL_CALL_DEBUG] Accumulating arguments for ${entry.function.name || 'unknown'}:`, {
-                id: entry.id,
-                index: entry.index,
-                before_length: before.length,
-                chunk_length: chunk.length,
-                chunk_content: chunk,
-                after_length: entry.function.arguments.length,
-                after_content: entry.function.arguments
-            });
+            // Tool call argument accumulation (debug stripped for perf)
         }
     }
 }
@@ -250,7 +238,7 @@ async function getApiKey(
 	_userId: string,
 	runtimeOverrides?: InferenceRuntimeOverrides,
 ): Promise<string> {
-    console.log("Getting API key for provider: ", provider);
+    // API key resolution for provider (log stripped for perf)
 
     const runtimeKey = runtimeOverrides?.userApiKeys?.[provider];
     if (runtimeKey && isValidApiKey(runtimeKey)) {
@@ -687,7 +675,7 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                 ...toolsOpts,
                 model: modelName,
                 messages: messagesToPass as OpenAI.ChatCompletionMessageParam[],
-                max_completion_tokens: maxTokens || 150000,
+                max_completion_tokens: maxTokens || 32000,
                 stream: stream ? true : false,
                 reasoning_effort: modelConfig.nonReasoning ? undefined : reasoning_effort,
                 temperature,
@@ -737,12 +725,6 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                 for await (const event of response) {
                     const delta = (event as ChatCompletionChunk).choices[0]?.delta;
                     
-                    // Provider-specific logging
-                    const provider = modelName.split('/')[0];
-                    if (delta?.tool_calls && (provider === 'google-ai-studio' || provider === 'gemini')) {
-                        console.log(`[PROVIDER_DEBUG] ${provider} tool_calls delta:`, JSON.stringify(delta.tool_calls, null, 2));
-                    }
-                    
                     if (delta?.tool_calls) {
                         try {
                             for (const deltaToolCall of delta.tool_calls as ToolCallsArray) {
@@ -757,7 +739,7 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                     content += delta?.content || '';
                     const slice = content.slice(streamIndex);
                     const finishReason = (event as ChatCompletionChunk).choices[0]?.finish_reason;
-                    if (slice.length >= stream.chunk_size || finishReason != null) {
+                    if (slice.length >= stream.chunk_size || (finishReason != null && slice.length > 0)) {
                         stream.onChunk(slice);
                         streamIndex += slice.length;
                     }
@@ -778,16 +760,9 @@ export async function infer<OutputSchema extends z.AnyZodObject>({
                     }
                     if (toolCall.function.arguments) {
                         try {
-                            // Validate JSON arguments early for visibility
-                            const parsed = JSON.parse(toolCall.function.arguments);
-                            console.log(`[TOOL_CALL_VALIDATION] Successfully parsed arguments for ${toolCall.function.name}:`, parsed);
+                            JSON.parse(toolCall.function.arguments);
                         } catch (error) {
-                            console.error(`[TOOL_CALL_VALIDATION] Invalid JSON in tool call arguments for ${toolCall.function.name}:`, {
-                                error: error instanceof Error ? error.message : String(error),
-                                arguments_length: toolCall.function.arguments.length,
-                                arguments_content: toolCall.function.arguments,
-                                arguments_hex: Buffer.from(toolCall.function.arguments).toString('hex')
-                            });
+                            console.error(`[TOOL_CALL_VALIDATION] Invalid JSON for ${toolCall.function.name}:`, error instanceof Error ? error.message : String(error));
                         }
                     }
                 }

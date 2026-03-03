@@ -13,7 +13,7 @@ import { AuthConfig, setAuthLevel } from '../../middleware/auth/routeAuth';
 export function setupAuthRoutes(app: Hono<AppEnv>): void {
     // Create a sub-router for auth routes
     const authRouter = new Hono<AppEnv>();
-    
+
     // Public authentication routes
     authRouter.get('/csrf-token', setAuthLevel(AuthConfig.public), adaptController(AuthController, AuthController.getCsrfToken));
     authRouter.get('/providers', setAuthLevel(AuthConfig.public), adaptController(AuthController, AuthController.getAuthProviders));
@@ -22,7 +22,7 @@ export function setupAuthRoutes(app: Hono<AppEnv>): void {
     authRouter.post('/verify-email', setAuthLevel(AuthConfig.public), adaptController(AuthController, AuthController.verifyEmail));
     authRouter.post('/resend-verification', setAuthLevel(AuthConfig.public), adaptController(AuthController, AuthController.resendVerificationOtp));
     authRouter.get('/check', setAuthLevel(AuthConfig.public), adaptController(AuthController, AuthController.checkAuth));
-    
+
     // Protected routes (require authentication) - must come before dynamic OAuth routes
     authRouter.get('/profile', setAuthLevel(AuthConfig.authenticated), adaptController(AuthController, AuthController.getProfile));
     authRouter.put('/profile', setAuthLevel(AuthConfig.authenticated), adaptController(AuthController, AuthController.updateProfile));
@@ -31,7 +31,7 @@ export function setupAuthRoutes(app: Hono<AppEnv>): void {
     // Session management routes
     authRouter.get('/sessions', setAuthLevel(AuthConfig.authenticated), adaptController(AuthController, AuthController.getActiveSessions));
     authRouter.delete('/sessions/:sessionId', setAuthLevel(AuthConfig.authenticated), adaptController(AuthController, AuthController.revokeSession));
-    
+
     // API Keys management routes
     authRouter.get('/api-keys', setAuthLevel(AuthConfig.authenticated), adaptController(AuthController, AuthController.getApiKeys));
     authRouter.post('/api-keys', setAuthLevel(AuthConfig.authenticated), adaptController(AuthController, AuthController.createApiKey));
@@ -39,11 +39,14 @@ export function setupAuthRoutes(app: Hono<AppEnv>): void {
 
     // SDK: exchange API key for short-lived access token
     authRouter.post('/exchange-api-key', setAuthLevel(AuthConfig.public), adaptController(AuthController, AuthController.exchangeApiKey));
-    
+
+    // SSO: login from Delegate with signed JWT
+    authRouter.get('/sso-login', setAuthLevel(AuthConfig.public), adaptController(AuthController, AuthController.ssoLogin));
+
     // OAuth routes (under /oauth path to avoid conflicts)
     authRouter.get('/oauth/:provider', setAuthLevel(AuthConfig.public), adaptController(AuthController, AuthController.initiateOAuth));
     authRouter.get('/callback/:provider', setAuthLevel(AuthConfig.public), adaptController(AuthController, AuthController.handleOAuthCallback));
-    
+
     // Mount the auth router under /api/auth
     app.route('/api/auth', authRouter);
 }

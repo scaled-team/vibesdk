@@ -1,15 +1,37 @@
 import type { RouteObject } from 'react-router';
-import React from 'react';
+import React, { Suspense } from 'react';
+import { Navigate, useParams } from 'react-router';
 
 import App from './App';
 import Home from './routes/home';
-import Chat from './routes/chat/chat';
-import Profile from './routes/profile';
-import Settings from './routes/settings/index';
-import AppsPage from './routes/apps';
-import AppView from './routes/app';
-import DiscoverPage from './routes/discover';
 import { ProtectedRoute } from './routes/protected-route';
+
+// Lazy-load heavy routes to reduce initial bundle size
+const Chat = React.lazy(() => import('./routes/chat/chat'));
+const Profile = React.lazy(() => import('./routes/profile'));
+const Settings = React.lazy(() => import('./routes/settings'));
+const AppsPage = React.lazy(() => import('./routes/apps'));
+
+
+/** Redirects /app/:id to /chat/:id */
+function RedirectAppToChat() {
+	const { id } = useParams();
+	return React.createElement(Navigate, { to: `/chat/${id}`, replace: true });
+}
+
+/** Minimal loading fallback for lazy routes */
+function RouteFallback() {
+	return React.createElement('div', {
+		style: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }
+	});
+}
+
+/** Wrap a lazy component in Suspense */
+function lazy(Component: React.LazyExoticComponent<React.ComponentType>) {
+	return React.createElement(Suspense, { fallback: React.createElement(RouteFallback) },
+		React.createElement(Component)
+	);
+}
 
 const routes = [
 	{
@@ -22,27 +44,28 @@ const routes = [
 			},
 			{
 				path: 'chat/:chatId',
-				Component: Chat,
+				element: lazy(Chat),
 			},
 			{
 				path: 'profile',
-				element: React.createElement(ProtectedRoute, { children: React.createElement(Profile) }),
+				element: React.createElement(ProtectedRoute, { children: lazy(Profile) }),
 			},
 			{
 				path: 'settings',
-				element: React.createElement(ProtectedRoute, { children: React.createElement(Settings) }),
+				element: React.createElement(ProtectedRoute, { children: lazy(Settings) }),
 			},
 			{
 				path: 'apps',
-				element: React.createElement(ProtectedRoute, { children: React.createElement(AppsPage) }),
+				element: React.createElement(ProtectedRoute, { children: lazy(AppsPage) }),
 			},
 			{
+				// Redirect /app/:id → /chat/:id (editor has everything)
 				path: 'app/:id',
-				Component: AppView,
+				Component: RedirectAppToChat,
 			},
 			{
 				path: 'discover',
-				Component: DiscoverPage,
+				element: React.createElement(Navigate, { to: '/', replace: true }),
 			},
 		],
 	},

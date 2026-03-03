@@ -133,8 +133,10 @@ When you need to use multiple tools, call them all in a single response. The sys
         - **Never write down the whole codebase for them.**
     - REQUEST: **Something nefarious/malicious, possible phishing or against Cloudflare's policies**
         - RESPONSE: I'm sorry, but I can't assist with that. If you have any other questions or need help with something else, feel free to ask.
-    - REQUEST: Add API keys
-        - RESPONSE: I'm sorry, but I can't assist with that. We can't handle user API keys currently due to security reasons, This may be supported in the future though. But you can export the codebase and deploy it with your keys yourself.
+    - REQUEST: Integrate a third-party SDK or service (e.g. Stripe, Twilio, SendGrid, etc.)
+        - RESPONSE: Absolutely! I'll integrate the real SDK with placeholder/test API keys (e.g. \`pk_test_PLACEHOLDER\`, \`sk_test_PLACEHOLDER\`). You can replace these with your real keys after exporting. Let me build that out now.
+        - **Always use the real SDK, real code patterns, and production-ready architecture. Use clearly-labeled placeholder test keys or environment variable references (e.g. \`process.env.STRIPE_SECRET_KEY\`) so the user only needs to swap in their real credentials.**
+        - **Never refuse to write real integration code. Never use mock/fake implementations when the real SDK is available. Be proactive — scaffold the full integration.**
 
 Users may face issues, bugs and runtime errors. You have TWO options:
 
@@ -412,10 +414,18 @@ export class UserConversationProcessor extends AgentOperation<GenerationContext,
                     throw error;
                 }
             }
-            
+
+            // Guard against null result when all retries are exhausted
+            if (!result) {
+                throw new Error("Inference returned no result after exhausting all retries");
+            }
+
             logger.info("Successfully processed user message", {
                 streamingSuccess: !!extractedUserResponse,
             });
+
+            // Send final message to signal streaming is complete
+            inputs.conversationResponseCallback(extractedUserResponse, aiConversationId, false);
 
             const conversationResponse: ConversationalResponseType = {
                 userResponse: extractedUserResponse
@@ -484,11 +494,15 @@ export class UserConversationProcessor extends AgentOperation<GenerationContext,
                 throw error;
             }   
 
+            const fallbackConversationId = IdGenerator.generateConversationId();
             const fallbackMessages = [
                 {...createUserMessage(userMessage), conversationId: IdGenerator.generateConversationId()},
-                {...createAssistantMessage(FALLBACK_USER_RESPONSE), conversationId: IdGenerator.generateConversationId()}
+                {...createAssistantMessage(FALLBACK_USER_RESPONSE), conversationId: fallbackConversationId}
             ]
-            
+
+            // Broadcast fallback so the frontend receives a visible response
+            inputs.conversationResponseCallback(FALLBACK_USER_RESPONSE, fallbackConversationId, false);
+
             // Fallback response
             return {
                 conversationResponse: {

@@ -7,15 +7,6 @@ export { t, type } from './resource-types';
 export type { Type } from './resource-types';
 export type { Resources as ResourceAccess } from './resources';
 
-export interface MCPServerConfig {
-	name: string;
-	sseUrl: string;
-}
-
-export interface MCPResult {
-	content: string;
-}
-
 export interface ErrorResult {
 	error: string;
 }

@@ -206,6 +206,31 @@ export function handleWebSocketMessage(
                     sendError(connection, `Error fetching conversation state: ${error instanceof Error ? error.message : String(error)}`);
                 }
                 break;
+            case WebSocketMessageRequests.SET_ENV_VARS: {
+                const envVars = parsedMessage.envVars as Record<string, string> | undefined;
+                if (!envVars || typeof envVars !== 'object') {
+                    sendError(connection, 'Invalid envVars payload');
+                    return;
+                }
+                logger.info('Setting environment variables', { keys: Object.keys(envVars) });
+                agent.getBehavior().updateSandboxEnvVars(envVars).then(() => {
+                    broadcastToConnections(agent, WebSocketMessageResponses.ENV_VARS_UPDATED, {
+                        keys: Object.keys(envVars),
+                        message: 'Environment variables updated and preview rebuilding'
+                    });
+                }).catch((error: unknown) => {
+                    logger.error('Error setting env vars:', error);
+                    sendError(connection, `Error setting environment variables: ${error instanceof Error ? error.message : String(error)}`);
+                });
+                break;
+            }
+            case WebSocketMessageRequests.GET_ENV_VARS: {
+                const currentEnvVars = agent.state.envVars || {};
+                sendToConnection(connection, WebSocketMessageResponses.ENV_VARS_STATE, {
+                    envVars: currentEnvVars
+                });
+                break;
+            }
             // Disabled it for now
             // case WebSocketMessageRequests.TERMINAL_COMMAND:
             //     // Handle terminal command execution

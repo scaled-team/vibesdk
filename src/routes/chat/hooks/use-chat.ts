@@ -2,7 +2,7 @@ import { WebSocket } from 'partysocket';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
-    RateLimitExceededError,
+	RateLimitExceededError,
 	MAX_AGENT_QUERY_LENGTH,
 	type BlueprintType,
 	type WebSocketMessage,
@@ -54,6 +54,8 @@ export function useChat({
 	onDebugMessage,
 	onTerminalMessage,
 	onVaultUnlockRequired,
+	onEnvVarsUpdated,
+	onEnvVarsState,
 }: {
 	chatId?: string;
 	query: string | null;
@@ -62,6 +64,8 @@ export function useChat({
 	onDebugMessage?: (type: 'error' | 'warning' | 'info' | 'websocket', message: string, details?: string, source?: string, messageType?: string, rawMessage?: unknown) => void;
 	onTerminalMessage?: (log: { id: string; content: string; type: 'command' | 'stdout' | 'stderr' | 'info' | 'error' | 'warn' | 'debug'; timestamp: number; source?: string }) => void;
 	onVaultUnlockRequired?: (reason: string) => void;
+	onEnvVarsUpdated?: (keys: string[]) => void;
+	onEnvVarsState?: (envVars: Record<string, string>) => void;
 }) {
 	// Derive initial behavior type from project type using feature system
 	const getInitialBehaviorType = (): BehaviorType => {
@@ -120,15 +124,15 @@ export function useChat({
 	const [isDeploying, setIsDeploying] = useState(false);
 	const [cloudflareDeploymentUrl, setCloudflareDeploymentUrl] = useState<string>('');
 	const [deploymentError, setDeploymentError] = useState<string>();
-	
+
 	// Issue tracking and debugging state
 	const [runtimeErrorCount, setRuntimeErrorCount] = useState(0);
 	const [staticIssueCount, setStaticIssueCount] = useState(0);
 	const [isDebugging, setIsDebugging] = useState(false);
-	
+
 	// Preview deployment state
 	const [isPreviewDeploying, setIsPreviewDeploying] = useState(false);
-	
+
 	// Redeployment state - tracks when redeploy button should be enabled
 	const [isRedeployReady, setIsRedeployReady] = useState(false);
 	// const [lastDeploymentPhaseCount, setLastDeploymentPhaseCount] = useState(0);
@@ -139,10 +143,10 @@ export function useChat({
 	const [isPhaseProgressActive, setIsPhaseProgressActive] = useState(false);
 
 	const [isThinking, setIsThinking] = useState(false);
-	
+
 	// Preview refresh state - triggers preview reload after deployment
 	const [shouldRefreshPreview, setShouldRefreshPreview] = useState(false);
-	
+
 	// Track whether we've completed initial state restoration to avoid disrupting active sessions
 	const [isInitialStateRestored, setIsInitialStateRestored] = useState(false);
 
@@ -195,57 +199,59 @@ export function useChat({
 	const handleWebSocketMessage = useMemo(
 		() =>
 			createWebSocketMessageHandler({
-			// State setters
-			setFiles,
-			setPhaseTimeline,
-			setProjectStages,
-			setMessages,
-			setBlueprint,
-			setQuery,
-			setPreviewUrl,
-			setTotalFiles,
-			setIsRedeployReady,
-			setIsPreviewDeploying,
-			setIsThinking,
-			setIsInitialStateRestored,
-			setShouldRefreshPreview,
-			setIsDeploying,
-			setCloudflareDeploymentUrl,
-			setDeploymentError,
-			setIsGenerationPaused,
-			setIsGenerating,
-			setIsPhaseProgressActive,
-			setRuntimeErrorCount,
-			setStaticIssueCount,
-			setIsDebugging,
-			setBehaviorType,
-			setInternalProjectType,
-			setTemplateDetails,
-			// Current state
-			isInitialStateRestored,
-			blueprint,
-			query,
-			bootstrapFiles,
-			files,
-			phaseTimeline,
-			previewUrl,
-			projectStages,
-			isGenerating,
-			urlChatId,
-			behaviorType,
-			// Functions
-			updateStage,
-			sendMessage,
-			loadBootstrapFiles,
-			onDebugMessage,
-			onTerminalMessage,
-			onVaultUnlockRequired,
-			clearDeploymentTimeout,
-			onPresentationFileEvent: (evt) => {
-				if (!evt.path.includes('/slides/')) return;
-				window.dispatchEvent(new CustomEvent('presentation-file-event', { detail: evt }));
-			},
-		} as HandleMessageDeps),
+				// State setters
+				setFiles,
+				setPhaseTimeline,
+				setProjectStages,
+				setMessages,
+				setBlueprint,
+				setQuery,
+				setPreviewUrl,
+				setTotalFiles,
+				setIsRedeployReady,
+				setIsPreviewDeploying,
+				setIsThinking,
+				setIsInitialStateRestored,
+				setShouldRefreshPreview,
+				setIsDeploying,
+				setCloudflareDeploymentUrl,
+				setDeploymentError,
+				setIsGenerationPaused,
+				setIsGenerating,
+				setIsPhaseProgressActive,
+				setRuntimeErrorCount,
+				setStaticIssueCount,
+				setIsDebugging,
+				setBehaviorType,
+				setInternalProjectType,
+				setTemplateDetails,
+				// Current state
+				isInitialStateRestored,
+				blueprint,
+				query,
+				bootstrapFiles,
+				files,
+				phaseTimeline,
+				previewUrl,
+				projectStages,
+				isGenerating,
+				urlChatId,
+				behaviorType,
+				// Functions
+				updateStage,
+				sendMessage,
+				loadBootstrapFiles,
+				onDebugMessage,
+				onTerminalMessage,
+				onVaultUnlockRequired,
+				onEnvVarsUpdated,
+				onEnvVarsState,
+				clearDeploymentTimeout,
+				onPresentationFileEvent: (evt) => {
+					if (!evt.path.includes('/slides/')) return;
+					window.dispatchEvent(new CustomEvent('presentation-file-event', { detail: evt }));
+				},
+			} as HandleMessageDeps),
 		[
 			isInitialStateRestored,
 			blueprint,
@@ -264,6 +270,8 @@ export function useChat({
 			onDebugMessage,
 			onTerminalMessage,
 			onVaultUnlockRequired,
+			onEnvVarsUpdated,
+			onEnvVarsState,
 			clearDeploymentTimeout,
 		],
 	);
@@ -275,7 +283,7 @@ export function useChat({
 			{ disableGenerate = false, isRetry = false }: { disableGenerate?: boolean; isRetry?: boolean } = {},
 		) => {
 			logger.debug(`🔌 ${isRetry ? 'Retrying' : 'Attempting'} WebSocket connection (attempt ${retryCount.current + 1}/${maxRetries + 1}):`, wsUrl);
-			
+
 			if (!wsUrl) {
 				logger.error('❌ WebSocket URL is required');
 				return;
@@ -309,14 +317,14 @@ export function useChat({
 						return;
 					}
 					if (myAttemptId !== connectAttemptIdRef.current) return;
-					
+
 					clearTimeout(connectionTimeout);
 					logger.info('✅ WebSocket connection established successfully!');
 					connectionStatus.current = 'connected';
-					
+
 					// Reset retry count on successful connection
 					retryCount.current = 0;
-					
+
 					// Clear any pending retry timeouts
 					retryTimeouts.current.forEach(clearTimeout);
 					retryTimeouts.current = [];
@@ -387,11 +395,11 @@ export function useChat({
 	const handleConnectionFailure = useCallback(
 		(wsUrl: string, disableGenerate: boolean, reason: string) => {
 			connectionStatus.current = 'failed';
-			
+
 			if (retryCount.current >= maxRetries) {
 				logger.error(`💥 WebSocket connection failed permanently after ${maxRetries + 1} attempts`);
 				sendMessage(createAIMessage('websocket_failed', `🚨 Connection failed permanently after ${maxRetries + 1} attempts.\n\n❌ Reason: ${reason}\n\n🔄 Please refresh the page to try again.`));
-				
+
 				// Debug logging for permanent failure
 				onDebugMessage?.('error',
 					'WebSocket Connection Failed Permanently',
@@ -402,22 +410,22 @@ export function useChat({
 			}
 
 			retryCount.current++;
-			
+
 			// Exponential backoff: 2^attempt * 1000ms (1s, 2s, 4s, 8s, 16s)
 			const retryDelay = Math.pow(2, retryCount.current) * 1000;
 			const maxDelay = 30000; // Cap at 30 seconds
 			const actualDelay = Math.min(retryDelay, maxDelay);
 
 			logger.warn(`🔄 Retrying WebSocket connection in ${actualDelay / 1000}s (attempt ${retryCount.current + 1}/${maxRetries + 1})`);
-			
+
 			sendMessage(createAIMessage('websocket_retrying', `🔄 Connection failed. Retrying in ${Math.ceil(actualDelay / 1000)} seconds... (attempt ${retryCount.current + 1}/${maxRetries + 1})\n\n❌ Reason: ${reason}`, true));
 
 			const timeoutId = setTimeout(() => {
 				connectWithRetryRef.current?.(wsUrl, { disableGenerate, isRetry: true });
 			}, actualDelay);
-			
+
 			retryTimeouts.current.push(timeoutId);
-			
+
 			// Debug logging for retry attempt
 			onDebugMessage?.('warning',
 				'WebSocket Connection Retry',
@@ -433,7 +441,7 @@ export function useChat({
 		handleConnectionFailureRef.current = handleConnectionFailure;
 	}, [connectWithRetry, handleConnectionFailure]);
 
-    // No legacy wrapper; call connectWithRetry directly
+	// No legacy wrapper; call connectWithRetry directly
 
 	useEffect(() => {
 		async function init() {
@@ -459,10 +467,19 @@ export function useChat({
 					connectionStatus.current = 'connecting';
 
 					// Start new code generation using API client
+					// Include workspace context from Delegate if available (injected via postMessage)
+					const delegateContextRaw = localStorage.getItem('vibesdk_delegateContext');
+					const delegateContext = delegateContextRaw ? (() => {
+						try { return JSON.parse(delegateContextRaw); } catch { return undefined; }
+					})() : undefined;
+
 					const response = await apiClient.createAgentSession({
 						query: userQuery,
+						context: typeof delegateContext === 'string' ? delegateContext : undefined,
 						projectType,
 						images: userImages, // Pass images from URL params for multi-modal blueprint
+						workspaceId: localStorage.getItem('vibesdk_workspaceId') || undefined,
+						projectId: localStorage.getItem('vibesdk_projectId') || undefined,
 					});
 
 					const parser = createRepairingJSONParser();
@@ -494,7 +511,7 @@ export function useChat({
 					}
 
 					for await (const obj of ndjsonStream(response.stream)) {
-                        logger.debug('Received chunk from server:', obj);
+						logger.debug('Received chunk from server:', obj);
 						if (obj.chunk) {
 							if (!startedBlueprintStream) {
 								sendMessage(createAIMessage('main', 'Blueprint is being generated...', true));
@@ -530,7 +547,7 @@ export function useChat({
 							logger.debug('Received projectType from server:', obj.projectType);
 						}
 						if (obj.template) {
-                            logger.debug('Received template from server:', obj.template);
+							logger.debug('Received template from server:', obj.template);
 							result.template = obj.template;
 							if (obj.template.files) {
 								loadBootstrapFiles(obj.template.files);
@@ -555,7 +572,7 @@ export function useChat({
 					logger.debug('connecting to ws with created id');
 					connectWithRetry(result.websocketUrl);
 					setChatId(result.agentId); // This comes from the server response
-					
+
 					// Emit app-created event for sidebar updates
 					appEvents.emitAppCreated(result.agentId, {
 						title: userQuery || 'New App',
@@ -615,27 +632,27 @@ export function useChat({
 		userQuery,
 	]);
 
-    // Mount/unmount: enable/disable reconnection and clear pending retries
-    useEffect(() => {
-        shouldReconnectRef.current = true;
-        return () => {
-            shouldReconnectRef.current = false;
-            retryTimeouts.current.forEach(clearTimeout);
-            retryTimeouts.current = [];
-            // Clear deployment timeout on unmount
-            if (deploymentTimeoutRef.current) {
-                clearTimeout(deploymentTimeoutRef.current);
-                deploymentTimeoutRef.current = null;
-            }
-        };
-    }, []);
+	// Mount/unmount: enable/disable reconnection and clear pending retries
+	useEffect(() => {
+		shouldReconnectRef.current = true;
+		return () => {
+			shouldReconnectRef.current = false;
+			retryTimeouts.current.forEach(clearTimeout);
+			retryTimeouts.current = [];
+			// Clear deployment timeout on unmount
+			if (deploymentTimeoutRef.current) {
+				clearTimeout(deploymentTimeoutRef.current);
+				deploymentTimeoutRef.current = null;
+			}
+		};
+	}, []);
 
-    // Close previous websocket on change
-    useEffect(() => {
-        return () => {
-            websocket?.close();
-        };
-    }, [websocket]);
+	// Close previous websocket on change
+	useEffect(() => {
+		return () => {
+			websocket?.close();
+		};
+	}, [websocket]);
 
 	useEffect(() => {
 		if (edit) {
@@ -658,9 +675,9 @@ export function useChat({
 
 	// Track debugging state based on deep_debug tool events in messages
 	useEffect(() => {
-		const hasActiveDebug = messages.some(msg => 
-			msg.role === 'assistant' && 
-			msg.ui?.toolEvents?.some(event => 
+		const hasActiveDebug = messages.some(msg =>
+			msg.role === 'assistant' &&
+			msg.ui?.toolEvents?.some(event =>
 				event.name === 'deep_debug' && event.status === 'start'
 			)
 		);

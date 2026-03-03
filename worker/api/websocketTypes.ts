@@ -561,6 +561,21 @@ export type VaultWebSocketMessage =
 	| VaultUpdateSecretRequest
 	| VaultSecretUpdatedResponse;
 
+// ========== ENVIRONMENT VARIABLES MESSAGES ==========
+
+/** Sent by server after env vars are saved and sandbox is rebuilding */
+type EnvVarsUpdatedMessage = {
+	type: 'env_vars_updated';
+	keys: string[];
+	message: string;
+};
+
+/** Sent by server with current env vars state */
+type EnvVarsStateMessage = {
+	type: 'env_vars_state';
+	envVars: Record<string, string>;
+};
+
 export type WebSocketMessage =
 	| StateMessage
 	| AgentConnectedMessage
@@ -620,7 +635,9 @@ export type WebSocketMessage =
 	| ServerLogMessage
 	| VaultUnlockedMessage
 	| VaultLockedMessage
-	| VaultRequiredMessage;
+	| VaultRequiredMessage
+	| EnvVarsUpdatedMessage
+	| EnvVarsStateMessage;
 
 // A type representing all possible message type strings (e.g., 'generation_started', 'file_generating', etc.)
 export type WebSocketMessageType = WebSocketMessage['type'];

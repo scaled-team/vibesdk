@@ -1,5 +1,5 @@
 import { Connection } from 'agents';
-import { 
+import {
     FileConceptType,
     FileOutputType,
     Blueprint,
@@ -28,6 +28,7 @@ import { AppService } from '../../../database';
 import { RateLimitExceededError } from 'shared/types/errors';
 import { ImageAttachment, type ProcessedImageAttachment } from '../../../types/image-attachment';
 import { OperationOptions } from '../../operations/common';
+import { fetchBlueprintDependencyDocs } from '../../utils/depDocsFetcher';
 import { ImageType, uploadImage, detectBlankScreenshot } from 'worker/utils/images';
 import { ScreenshotSecurity } from 'worker/utils/screenshot-security';
 import { DeepDebugResult } from '../types';
@@ -46,10 +47,10 @@ import { InMemoryAnalyzer } from '../../../services/static-analysis';
 
 // Screenshot capture configuration
 const SCREENSHOT_CONFIG = {
-    PAGE_LOAD_TIMEOUT: 15000,    // 15s for page load
-    WAIT_FOR_TIMEOUT: 2000,      // 2s additional wait after network idle
-    MAX_RETRIES: 2,              // 2 retries = 3 total attempts
-    RETRY_DELAY_BASE: 2000,      // 2s base delay between retries
+    PAGE_LOAD_TIMEOUT: 8000,     // 8s for page load (was 15s)
+    WAIT_FOR_TIMEOUT: 1000,      // 1s additional wait after network idle (was 2s)
+    MAX_RETRIES: 1,              // 1 retry = 2 total attempts (was 3)
+    RETRY_DELAY_BASE: 1000,      // 1s base delay between retries (was 2s)
     MIN_FILE_SIZE: 10000,        // 10KB minimum for valid screenshot
     MIN_ENTROPY: 2.0,            // Minimum entropy threshold
 };
@@ -64,14 +65,14 @@ export interface BaseCodingOperations {
 /**
  * Base class for all coding behaviors
  */
-export abstract class BaseCodingBehavior<TState extends BaseProjectState> 
+export abstract class BaseCodingBehavior<TState extends BaseProjectState>
     extends AgentComponent<TState> implements ICodingAgent {
     protected static readonly MAX_COMMANDS_HISTORY = 10;
 
     protected projectSetupAssistant: ProjectSetupAssistant | undefined;
 
     protected templateDetailsCache: TemplateDetails | null = null;
-    
+
     // In-memory storage for user-uploaded images (not persisted in DO state)
     protected pendingUserImages: ProcessedImageAttachment[] = []
     protected generationPromise: Promise<void> | null = null;
@@ -83,7 +84,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
 
     protected userModelConfigs?: Record<AgentActionKey, ModelConfig>;
     protected runtimeOverrides?: InferenceRuntimeOverrides;
-    
+
     protected operations: BaseCodingOperations = {
         regenerateFile: new FileRegenerationOperation(),
         fastCodeFixer: new FastCodeFixerOperation(),
@@ -117,7 +118,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
         const { templateInfo } = initArgs;
         if (templateInfo) {
             this.templateDetailsCache = templateInfo.templateDetails;
-            
+
             await this.ensureTemplateDetails();
         }
 
@@ -137,14 +138,14 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
                 this.generateReadme()
             ]);
             this.logger.info("Deployment to sandbox service and initial commands predictions completed successfully");
-                await this.executeCommands(setupCommands.commands);
-                this.logger.info("Initial commands executed successfully");
+            await this.executeCommands(setupCommands.commands);
+            this.logger.info("Initial commands executed successfully");
         } catch (error) {
             this.logger.error("Error during async initialization:", error);
             // throw error;
         }
     }
-    onStateUpdate(_state: TState, _source: "server" | Connection) {}
+    onStateUpdate(_state: TState, _source: "server" | Connection) { }
 
     async ensureTemplateDetails() {
         // Skip fetching details for "scratch" baseline
@@ -158,11 +159,11 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
             if (!results.success || !results.templateDetails) {
                 throw new Error(`Failed to get template details for: ${this.state.templateName}`);
             }
-            
+
             const templateDetails = results.templateDetails;
-            
+
             const customizedAllFiles = { ...templateDetails.allFiles };
-            
+
             this.logger.info('Customizing template files for older app');
             const customizedFiles = customizeTemplateFiles(
                 templateDetails.allFiles,
@@ -172,7 +173,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
                 }
             );
             Object.assign(customizedAllFiles, customizedFiles);
-            
+
             this.templateDetailsCache = {
                 ...templateDetails,
                 allFiles: customizedAllFiles
@@ -213,13 +214,13 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
         if (!commandsHistory || commandsHistory.length === 0) {
             return;
         }
-        
+
         // Use only validated commands
         const bootstrapScript = generateBootstrapScript(
             this.state.projectName,
             commandsHistory
         );
-        
+
         await this.fileManager.saveGeneratedFile(
             {
                 filePath: '.bootstrap.js',
@@ -229,7 +230,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
             'chore: Update bootstrap script with latest commands',
             true
         );
-        
+
         this.logger.info('Updated bootstrap script with commands', {
             commandCount: commandsHistory.length,
             commands: commandsHistory
@@ -289,13 +290,13 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
         if (this.currentAbortController && !this.currentAbortController.signal.aborted) {
             return this.currentAbortController;
         }
-        
+
         // Create new controller in memory for new operation
         this.currentAbortController = new AbortController();
-        
+
         return this.currentAbortController;
     }
-    
+
     /**
      * Cancels the current inference operation if any
      */
@@ -308,21 +309,21 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
         }
         return false;
     }
-    
+
     /**
      * Clears abort controller after successful completion
      */
     protected clearAbortController(): void {
         this.currentAbortController = undefined;
     }
-    
+
     /**
      * Gets inference context with abort signal
      * Reuses existing abort controller for nested operations
      */
     protected getInferenceContext(): InferenceContext {
         const controller = this.getOrCreateAbortController();
-        
+
         return {
             metadata: this.state.metadata,
             enableFastSmartCodeFix: false,  // TODO: Do we want to enable it via some config?
@@ -361,6 +362,20 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
             message: 'Blueprint updated',
             updatedKeys: Object.keys(blueprint || {})
         });
+
+        // Pre-fetch dependency documentation in the background (non-blocking)
+        if (blueprint.frameworks?.length) {
+            fetchBlueprintDependencyDocs(blueprint.frameworks)
+                .then(docs => {
+                    if (docs) {
+                        this.setState({ ...this.state, fetchedDepDocs: docs });
+                        this.logger.info('Dependency docs pre-fetched and cached');
+                    }
+                })
+                .catch(err => {
+                    this.logger.warn('Failed to pre-fetch dependency docs:', err);
+                });
+        }
     }
 
     getProjectType() {
@@ -430,6 +445,16 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
         return this.state.mvpGenerated;
     }
 
+    recordCompletedMilestone(milestoneName: string): void {
+        const state = this.state as unknown as AgenticState;
+        if (state.completedMilestones && !state.completedMilestones.includes(milestoneName)) {
+            this.setState({
+                ...this.state,
+                completedMilestones: [...state.completedMilestones, milestoneName]
+            } as TState);
+        }
+    }
+
     private async buildWrapper() {
         this.broadcast(WebSocketMessageResponses.GENERATION_STARTED, {
             message: 'Starting code generation',
@@ -451,7 +476,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
         } finally {
             // Clear abort controller after generation completes
             this.clearAbortController();
-            
+
             const appService = new AppService(this.env);
             await appService.updateApp(
                 this.getAgentId(),
@@ -466,7 +491,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
             });
         }
     }
-    
+
     /**
      * Abstract method to be implemented by subclasses
      * Contains the main logic for code generation and review process
@@ -549,7 +574,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
     async getFullState(): Promise<TState> {
         return this.state;
     }
-    
+
     migrateStateIfNeeded(): void {
         // no-op, only older phasic agents need this, for now.
     }
@@ -565,7 +590,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
 
         try {
             const errors = await this.deploymentManager.fetchRuntimeErrors(clear);
-            
+
             if (errors.length > 0) {
                 this.broadcast(WebSocketMessageResponses.RUNTIME_ERROR_FOUND, {
                     errors,
@@ -602,7 +627,17 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
             if (templateDetails?.renderMode === 'browser') {
                 analysisResponse = await this.runInMemoryAnalysis(files);
             } else {
-                analysisResponse = await this.deploymentManager.runStaticAnalysis(files);
+                try {
+                    analysisResponse = await this.deploymentManager.runStaticAnalysis(files);
+                } catch (sandboxError: any) {
+                    // If sandbox isn't available yet, fall back to in-memory analysis
+                    if (sandboxError?.message?.includes('No sandbox instance available')) {
+                        this.logger.warn('Sandbox not available for analysis, falling back to in-memory analysis');
+                        analysisResponse = await this.runInMemoryAnalysis(files);
+                    } else {
+                        throw sandboxError;
+                    }
+                }
             }
 
             // Only cache full (unscoped) analysis results
@@ -646,7 +681,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
     /**
      * Apply deterministic code fixes for common TypeScript errors
      */
-    protected async applyDeterministicCodeFixes() : Promise<StaticAnalysisResponse | undefined> {
+    protected async applyDeterministicCodeFixes(): Promise<StaticAnalysisResponse | undefined> {
         try {
             // Get static analysis and do deterministic fixes
             const staticAnalysis = await this.runStaticAnalysisCode();
@@ -698,14 +733,14 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
                     }
                 }
                 if (fixResult.modifiedFiles.length > 0) {
-                        this.logger.info("Applying deterministic fixes to files, Fixes: ", JSON.stringify(fixResult, null, 2));
-                        const fixedFiles = fixResult.modifiedFiles.map(file => ({
-                            filePath: file.filePath,
-                            filePurpose: allFiles.find(f => f.filePath === file.filePath)?.filePurpose || '',
-                            fileContents: file.fileContents
+                    this.logger.info("Applying deterministic fixes to files, Fixes: ", JSON.stringify(fixResult, null, 2));
+                    const fixedFiles = fixResult.modifiedFiles.map(file => ({
+                        filePath: file.filePath,
+                        filePurpose: allFiles.find(f => f.filePath === file.filePath)?.filePurpose || '',
+                        fileContents: file.fileContents
                     }));
                     await this.fileManager.saveGeneratedFiles(fixedFiles, "fix: applied deterministic fixes");
-                    
+
                     await this.deployToSandbox(fixedFiles, false, "fix: applied deterministic fixes");
                     this.logger.info("Deployed deterministic fixes to sandbox");
                 }
@@ -732,7 +767,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
             this.runStaticAnalysisCode()
         ]);
         this.logger.info("Fetched all issues:", JSON.stringify({ runtimeErrors, staticAnalysis }));
-        
+
         return { runtimeErrors, staticAnalysis };
     }
 
@@ -821,12 +856,12 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
             ...this.state,
             blueprint: updated
         });
-        
+
         this.broadcast(WebSocketMessageResponses.BLUEPRINT_UPDATED, {
             message: 'Blueprint updated',
             updatedKeys: Object.keys(filtered)
         });
-        
+
         return updated;
     }
 
@@ -889,7 +924,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
             if (file.filePath.startsWith(slidesDirectory) && file.filePath.endsWith('.json')) {
                 const manifestPath = `${slidesDirectory}/manifest.json`
                 const existingManifest = this.fileManager.getFile(manifestPath)
-                
+
                 // Parse existing manifest or create new one
                 let manifestData: { slides: string[] } = { slides: [] };
                 if (existingManifest) {
@@ -905,12 +940,12 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
                 } else {
                     manifestData = { slides: [] };
                 }
-                
+
                 // Add slide path to slides array if not already present
                 const relativeSlidePath = file.filePath.replace(slidesDirectory + '/', '');
                 if (!manifestData.slides.includes(relativeSlidePath)) {
                     manifestData.slides.push(relativeSlidePath);
-                    
+
                     // Save updated manifest
                     const updatedManifest: FileOutputType = {
                         filePath: manifestPath,
@@ -918,7 +953,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
                         filePurpose: 'Presentation slides manifest'
                     };
                     this.fileManager.recordFileChanges([updatedManifest]);
-                    
+
                     this.logger.info('Updated manifest.json with new slide', {
                         slidePath: relativeSlidePath,
                         totalSlides: manifestData.slides.length
@@ -938,9 +973,9 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
             filePath: file.filePath,
             original_issues: issues,
         });
-        
+
         const result = await this.operations.regenerateFile.execute(
-            {file, issues, retryIndex},
+            { file, issues, retryIndex },
             this.getOperationOptions()
         );
 
@@ -952,7 +987,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
             file: fileState,
             original_issues: issues,
         });
-        
+
         return fileState;
     }
 
@@ -1006,11 +1041,16 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
             requirementsCount: requirements.length,
             filesCount: files.length
         });
-        
-        // Broadcast file generation started
+
+        // Broadcast file generation started with full phase object for timeline UI
         this.broadcast(WebSocketMessageResponses.PHASE_IMPLEMENTING, {
             message: `Generating files: ${phaseName}`,
-            phaseName
+            phaseName,
+            phase: {
+                name: phaseName,
+                description: phaseDescription,
+                files: files.map(f => ({ path: f.path, purpose: f.purpose || '' }))
+            }
         });
 
         const skippedFiles: { path: string; purpose: string; diff: string }[] = [];
@@ -1078,7 +1118,17 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
 
         await this.deployToSandbox(savedFiles, false);
 
-        return { 
+        // Broadcast phase completed for timeline UI
+        this.broadcast(WebSocketMessageResponses.PHASE_IMPLEMENTED, {
+            message: `Completed: ${phaseName}`,
+            phase: {
+                name: phaseName,
+                description: phaseDescription,
+                files: savedFiles.map(f => ({ path: f.filePath, purpose: f.filePurpose || '' }))
+            }
+        });
+
+        return {
             files: [
                 ...skippedFiles,
                 ...savedFiles.map(f => {
@@ -1087,7 +1137,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
                         purpose: f.filePurpose || '',
                         diff: f.lastDiff || ''
                     };
-                }) 
+                })
             ]
         };
     }
@@ -1148,10 +1198,10 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
             this.broadcast(WebSocketMessageResponses.DEPLOYMENT_COMPLETED, result);
             return result;
         }
-            
+
         // Invalidate static analysis cache
         this.staticAnalysisCache = null;
-        
+
         // Call deployment manager with callbacks for broadcasting at the right times
         const result = await this.deploymentManager.deployToSandbox(
             files,
@@ -1177,7 +1227,17 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
 
         return result;
     }
-    
+
+    /**
+     * Update sandbox environment variables and redeploy
+     */
+    async updateSandboxEnvVars(envVars: Record<string, string>): Promise<void> {
+        // Save to state
+        this.setState({ ...this.state, envVars });
+        // Redeploy to pick up new env vars (createNewInstance merges state.envVars)
+        await this.deployToSandbox([], true);
+    }
+
     /**
      * Deploy the generated code to Cloudflare Workers
      */
@@ -1187,7 +1247,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
             if (!this.state.sandboxInstanceId) {
                 this.logger.info('No sandbox instance, deploying to sandbox first');
                 await this.deployToSandbox();
-                
+
                 if (!this.state.sandboxInstanceId) {
                     this.logger.error('Failed to deploy to sandbox service');
                     this.broadcast(WebSocketMessageResponses.CLOUDFLARE_DEPLOYMENT_ERROR, {
@@ -1241,10 +1301,10 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
         if (this.state.templateName !== templateName) {
             // Get template catalog info to sync projectType
             const catalogResponse = await BaseSandboxService.listTemplates();
-            const catalogInfo = catalogResponse.success 
+            const catalogInfo = catalogResponse.success
                 ? catalogResponse.templates.find(t => t.name === templateName)
                 : null;
-            
+
             // Update state with template name and projectType if available
             this.setState({
                 ...this.state,
@@ -1298,7 +1358,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
     isDeepDebugging(): boolean {
         return this.deepDebugPromise !== null;
     }
-    
+
     getDeepDebugSessionState(): { conversationId: string } | null {
         if (this.deepDebugConversationId && this.deepDebugPromise) {
             return { conversationId: this.deepDebugConversationId };
@@ -1356,16 +1416,16 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
 
     protected async saveExecutedCommands(commands: string[]) {
         this.logger.info('Saving executed commands', { commands });
-        
+
         // Merge with existing history
         const mergedCommands = [...(this.state.commandsHistory || []), ...commands];
-        
+
         // Validate, deduplicate, and clean
         const { validCommands, invalidCommands, deduplicated } = validateAndCleanBootstrapCommands(mergedCommands);
 
         // Log what was filtered out
         if (invalidCommands.length > 0 || deduplicated > 0) {
-            this.logger.warn('[commands] Bootstrap commands cleaned', { 
+            this.logger.warn('[commands] Bootstrap commands cleaned', {
                 invalidCommands,
                 invalidCount: invalidCommands.length,
                 deduplicatedCount: deduplicated,
@@ -1383,13 +1443,13 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
         await this.updateBootstrapScript(validCommands);
 
         // Sync package.json if any dependency-modifying commands were executed
-        const hasDependencyCommands = commands.some(cmd => 
-            cmd.includes('install') || 
-            cmd.includes(' add ') || 
+        const hasDependencyCommands = commands.some(cmd =>
+            cmd.includes('install') ||
+            cmd.includes(' add ') ||
             cmd.includes('remove') ||
             cmd.includes('uninstall')
         );
-        
+
         if (hasDependencyCommands) {
             this.logger.info('Dependency commands executed, syncing package.json from sandbox');
             await this.syncPackageJsonFromSandbox();
@@ -1433,14 +1493,14 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
             let currentChunk = chunk;
             let retryCount = 0;
             const maxRetries = shouldRetry ? 3 : 1;
-            
+
             while (currentChunk.length > 0 && retryCount < maxRetries) {
                 try {
                     this.broadcast(WebSocketMessageResponses.COMMAND_EXECUTING, {
                         message: retryCount > 0 ? `Retrying commands (attempt ${retryCount + 1}/${maxRetries})` : "Executing commands",
                         commands: currentChunk
                     });
-                    
+
                     const resp = await this.getSandboxServiceClient().executeCommands(
                         state.sandboxInstanceId,
                         currentChunk
@@ -1472,29 +1532,29 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
                         this.logger.info(`All commands in chunk executed successfully`);
                         break;
                     }
-                    
+
                     // Handle failures
                     const failedCommands = failures.map(r => r.command);
                     this.logger.warn(`${failures.length} commands failed: ${failedCommands.join(", ")}`);
-                    
+
                     // Only retry if shouldRetry is true
                     if (!shouldRetry) {
                         break;
                     }
-                    
+
                     retryCount++;
-                    
+
                     // For install commands, try AI regeneration
-                    const failedInstallCommands = failedCommands.filter(cmd => 
+                    const failedInstallCommands = failedCommands.filter(cmd =>
                         cmd.startsWith("bun") || cmd.startsWith("npm") || cmd.includes("install")
                     );
-                    
+
                     if (failedInstallCommands.length > 0 && retryCount < maxRetries) {
                         // Use AI to suggest alternative commands
                         const newCommands = await this.getProjectSetupAssistant().generateSetupCommands(
                             `The following install commands failed: ${JSON.stringify(failures, null, 2)}. Please suggest alternative commands.`
                         );
-                        
+
                         if (newCommands?.commands && newCommands.commands.length > 0) {
                             this.logger.info(`AI suggested ${newCommands.commands.length} alternative commands`);
                             this.broadcast(WebSocketMessageResponses.COMMAND_EXECUTING, {
@@ -1520,7 +1580,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
 
         // Record command execution history
         const failedCommands = commands.filter(cmd => !successfulCommands.includes(cmd));
-        
+
         if (failedCommands.length > 0) {
             this.broadcastError('Failed to execute commands', new Error(failedCommands.join(", ")));
         } else {
@@ -1554,7 +1614,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
                 ...this.state,
                 lastPackageJson: packageJson
             });
-            
+
             // Commit to git repository
             const fileState = await this.fileManager.saveGeneratedFile(
                 {
@@ -1565,17 +1625,17 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
                 'chore: sync package.json dependencies from sandbox',
                 true
             );
-            
-            this.logger.info('Successfully synced package.json to git', { 
+
+            this.logger.info('Successfully synced package.json to git', {
                 filePath: fileState.filePath,
             });
-            
+
             // Broadcast update to clients
             this.broadcast(WebSocketMessageResponses.FILE_GENERATED, {
                 message: 'Synced package.json from sandbox',
                 file: fileState
             });
-            
+
         } catch (error) {
             this.logger.error('Failed to sync package.json from sandbox', error);
             // Non-critical error - don't throw, just log
@@ -1586,7 +1646,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
         if (!this.state.sandboxInstanceId) {
             throw new Error('Cannot get logs: No sandbox instance available');
         }
-        
+
         const response = await this.getSandboxServiceClient().getLogs(this.state.sandboxInstanceId, _reset, durationSeconds);
         if (response.success) {
             return `STDOUT: ${response.logs.stdout}\nSTDERR: ${response.logs.stderr}`;
@@ -1598,7 +1658,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
     /**
      * Delete files from the file manager
      */
-    async deleteFiles(filePaths: string[]) : Promise<{ success: boolean, error?: string }> {
+    async deleteFiles(filePaths: string[]): Promise<{ success: boolean, error?: string }> {
         const deleteCommands: string[] = [];
         for (const filePath of filePaths) {
             deleteCommands.push(`rm -rf ${filePath}`);
@@ -1621,7 +1681,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
      */
     async handleUserInput(userMessage: string, images?: ImageAttachment[]): Promise<void> {
         try {
-            this.logger.info('Processing user input message', { 
+            this.logger.info('Processing user input message', {
                 messageLength: userMessage.length,
                 pendingInputsCount: this.state.pendingUserInputs.length,
                 hasImages: !!images && images.length > 0,
@@ -1650,8 +1710,8 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
 
             // Process the user message using conversational assistant
             const conversationalResponse = await this.operations.processUserMessage.execute(
-                { 
-                    userMessage, 
+                {
+                    userMessage,
                     conversationState,
                     conversationResponseCallback: (
                         message: string,
@@ -1663,7 +1723,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
                         if (tool?.name === 'deep_debug' && tool.status === 'start') {
                             this.deepDebugConversationId = conversationId;
                         }
-                        
+
                         this.broadcast(WebSocketMessageResponses.CONVERSATION_RESPONSE, {
                             message,
                             conversationId,
@@ -1674,7 +1734,7 @@ export abstract class BaseCodingBehavior<TState extends BaseProjectState>
                     errors,
                     projectUpdates,
                     images: uploadedImages
-                }, 
+                },
                 this.getOperationOptions()
             );
 

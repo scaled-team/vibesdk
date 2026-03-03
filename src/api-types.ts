@@ -168,6 +168,7 @@ export type {
 export type {
   Blueprint as BlueprintType,
   PhasicBlueprint,
+  AgenticBlueprint,
   CodeReviewOutputType,
   FileConceptType,
   FileOutputType as GeneratedFile,
@@ -175,6 +176,7 @@ export type {
 
 export type {
   AgentState,
+  AgenticState,
   PhasicState
 } from 'worker/agents/core/state';
 
@@ -220,6 +222,8 @@ export interface FileType {
 	needsFixing?: boolean;
 	hasErrors?: boolean;
 	language?: string;
+	/** Previous file contents before last agent modification (for diff view) */
+	previousContents?: string;
 }
 
 // Streaming response wrapper types for agent session creation

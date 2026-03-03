@@ -74,6 +74,8 @@ export function buildDebugTools(session: DeepDebuggerSession, logger: Structured
         createDeployPreviewTool(session.agent, logger),
         createWaitTool(logger),
         createGitTool(session.agent, logger),
+        // Documentation lookup for debugging unfamiliar errors
+        toolWebSearchDefinition,
     ];
     return withRenderer(tools, toolRenderer);
 }

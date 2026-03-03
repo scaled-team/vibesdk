@@ -56,7 +56,7 @@ export class CodingAgentController extends BaseController {
             this.logger.info('Starting code generation process');
 
             const url = new URL(request.url);
-            const hostname = url.hostname === 'localhost' ? `localhost:${url.port}`: getPreviewDomain(env);
+            const hostname = url.hostname === 'localhost' ? `localhost:${url.port}` : getPreviewDomain(env);
             // Parse the query from the request body
             let body: CodeGenArgs;
             try {
@@ -109,10 +109,38 @@ export class CodingAgentController extends BaseController {
             const behaviorType = resolveBehaviorType(body);
 
             this.logger.info(`Resolved behaviorType: ${behaviorType}, projectType: ${projectType} for agent ${agentId}`);
-                                
+
+            // Save a minimal app record immediately so it exists when the client navigates to the chat page.
+            // The Durable Object will update it later with blueprint details (title, description, framework).
+            // This MUST succeed — without a database record the client gets 404 on the app
+            // and WebSocket auth (ownerOnly) fails because there is no ownership record to check.
+            const appService = new AppService(env);
+            try {
+                await appService.createApp({
+                    id: agentId,
+                    userId: user.id,
+                    sessionToken: null,
+                    title: query.substring(0, 100),
+                    originalPrompt: query,
+                    workspaceId: body.workspaceId,
+                    projectId: body.projectId,
+                    visibility: 'private',
+                    status: 'generating',
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                });
+                this.logger.info(`Early app record saved for agent ${agentId}`);
+            } catch (err) {
+                this.logger.error(`Failed to create early app record for agent ${agentId}`, err);
+                return CodingAgentController.createErrorResponse(
+                    'Failed to initialize project. Please try again.',
+                    500,
+                );
+            }
+
             // Fetch all user model configs, api keys and agent instance at once
             const userConfigsRecord = await modelConfigService.getUserModelConfigs(user.id);
-                                
+
             // Extract only user-overridden configs, stripping metadata fields
             const userModelConfigs: Record<string, ModelConfig> = {};
             for (const [actionKey, mergedConfig] of Object.entries(userConfigsRecord)) {
@@ -128,13 +156,15 @@ export class CodingAgentController extends BaseController {
                 metadata: {
                     agentId: agentId,
                     userId: user.id,
+                    workspaceId: body.workspaceId,
+                    projectId: body.projectId,
                 },
                 userModelConfigs,
                 runtimeOverrides,
                 enableRealtimeCodeFix: false, // This costs us too much, so disabled it for now
                 enableFastSmartCodeFix: false,
             }
-                                
+
             this.logger.info(`Initialized inference context for user ${user.id}`, {
                 modelConfigsCount: Object.keys(userModelConfigs).length,
             });
@@ -168,13 +198,14 @@ export class CodingAgentController extends BaseController {
 
             const baseInitArgs = {
                 query,
+                context: body.context,
                 language: body.language || defaultCodeGenArgs.language,
                 frameworks: body.frameworks || defaultCodeGenArgs.frameworks,
                 hostname,
                 inferenceContext,
                 images: uploadedImages,
                 onBlueprintChunk: (chunk: string) => {
-                    writer.write({chunk});
+                    writer.write({ chunk });
                 },
             } as const;
 
@@ -188,7 +219,7 @@ export class CodingAgentController extends BaseController {
             });
 
             this.logger.info(`Agent ${agentId} init launched successfully`);
-            
+
             return new Response(readable, {
                 status: 200,
                 headers: {
@@ -346,7 +377,7 @@ export class CodingAgentController extends BaseController {
             }
 
             // Check if app is public
-            if(appResult.visibility !== 'public') {
+            if (appResult.visibility !== 'public') {
                 // If user is logged in and is the owner, allow preview deployment
                 const user = context.user;
                 if (!user || user.id !== appResult.userId) {
@@ -358,7 +389,7 @@ export class CodingAgentController extends BaseController {
             try {
                 // Get the agent instance
                 const agentInstance = await getAgentStub(env, agentId);
-                
+
                 // Deploy the preview
                 const preview = await agentInstance.deployToSandbox();
                 if (!preview) {

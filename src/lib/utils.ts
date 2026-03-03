@@ -6,8 +6,8 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function getPreviewUrl(previewURL?: string, tunnelURL?: string): string {
-    // return import.meta.env.VITE_PREVIEW_MODE === 'tunnel' ? tunnelURL || previewURL || '' : previewURL || tunnelURL || '';
-    return previewURL || tunnelURL || '';
+  // return import.meta.env.VITE_PREVIEW_MODE === 'tunnel' ? tunnelURL || previewURL || '' : previewURL || tunnelURL || '';
+  return previewURL || tunnelURL || '';
 }
 
 export function capitalizeFirstLetter(str: string) {

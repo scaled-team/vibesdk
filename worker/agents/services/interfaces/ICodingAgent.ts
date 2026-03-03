@@ -62,7 +62,9 @@ export interface ICodingAgent {
     ): Promise<{ files: Array<{ path: string; purpose: string; diff: string }> }>;
 
     regenerateFileByPath(path: string, issues: string[]): Promise<{ path: string; diff: string }>;
-    
+
+    recordCompletedMilestone(milestoneName: string): void;
+
     isCodeGenerating(): boolean;
     
     waitForGeneration(): Promise<void>;
